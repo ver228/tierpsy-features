@@ -13,7 +13,8 @@ import pandas as pd
 
 from collections import OrderedDict
 
-from helper import DataPartition, nanunwrap
+from tierpsy_features.helper import DataPartition, nanunwrap
+from tierpsy_features import EIGEN_PROJECTION_FILE
 
 #%% Morphology Features
 def get_widths(widths):
@@ -180,7 +181,6 @@ def _h_angles(skeletons):
     return angles, mean_angles
 
 def get_eigen_projections(skeletons):
-    EIGEN_PROJECTION_FILE = 'master_eigen_worms_N2.mat'
     with tables.File(EIGEN_PROJECTION_FILE) as fid:
         eigen_worms = fid.get_node('/eigenWorms')[:]
         eigen_worms = eigen_worms.T
@@ -248,9 +248,6 @@ if __name__ == '__main__':
     ventral_contours = data['ventral_contour']
     widths = data['widths']
     
-    
-    
-
     feat_morph = get_morphology_features(skeletons, widths, dorsal_contours, ventral_contours)
     feat_posture = get_posture_features(skeletons, curvature_window = 4)
     

@@ -7,14 +7,27 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict
 
-from helper import DataPartition, nanunwrap
-#%%
+from tierpsy_features.helper import DataPartition, nanunwrap
+
 def _h_orientation_vector(x, axis=None):
     return x[:, 0, :] - x[:, -1, :]
 
 def _h_get_velocity(x, delta_frames, fps):
     delta_time = delta_frames/fps
     v = (x[delta_frames:] - x[:-delta_frames])/delta_time
+    
+    #pad with nan so the vector match the original vectors
+    pad_w = [(int(np.floor(delta_frames/2)), int(np.ceil(delta_frames/2)))]
+    
+    #explicity add zero path if there are extra dimensions
+    if x.ndim > 1:
+        pad_w += [(0,0) for _ in range(x.ndim-1)]
+    
+    v = np.pad(v, 
+              pad_w, 
+              'constant', 
+              constant_values = np.nan)
+    
     return v
 
 #%%
@@ -45,7 +58,7 @@ def get_velocity(skeletons, partition, delta_frames, fps, _is_plot = False):
     speed = np.linalg.norm(velocity, axis=1)
     #I do not need to normalize the vectors because it will only add a constant factor, 
     #and I am only interested in the sign
-    s_sign = np.sign(np.sum(velocity*orientation_v[delta_frames:], axis=1))
+    s_sign = np.sign(np.sum(velocity*orientation_v, axis=1))
     signed_speed = speed *s_sign
     
     #let's change the vector to angles
@@ -146,6 +159,8 @@ def get_velocity_features(skeletons, delta_time, fps):
     
     delta_frames = int(round(fps*delta_time))
 
+    
+
     signed_speed_body, angular_velocity_body, centered_skeleton = get_velocity(skeletons, 'body', delta_frames, fps)
     signed_speed_midbody, angular_velocity_midbody, _ = get_velocity(skeletons, 'midbody', delta_frames, fps)
     
@@ -170,20 +185,23 @@ def get_velocity_features(skeletons, delta_time, fps):
     for p in partitions:
         velocities['relative_angular_velocity_' + p] = r_angular_velocities[p]
     
+    
+    
+    #get into data frame
     velocities = pd.DataFrame.from_dict(velocities)
+    
+    assert velocities.shape[0] == skeletons.shape[0]
+    
     return velocities
 
 
 #%%
 if __name__ == '__main__':
     #data = np.load('worm_example_small_W1.npz')
-    data = np.load('worm_example.npz')
+    data = np.load('../notebooks/data/worm_example.npz')
     skeletons = data['skeleton']
-    
     
     fps = 25
     delta_time = 1/3 #delta time in seconds to calculate the velocity
-    
-
     velocities = get_velocity_features(skeletons, delta_time, fps)
     
