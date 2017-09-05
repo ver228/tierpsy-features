@@ -83,18 +83,30 @@ def _h_relative_velocity(segment_coords, delta_frames, fps):
     return r_radial_velocity, r_angular_velocity
 
 
+
+
 def get_relative_velocities(centered_skeleton, partitions, delta_frames, fps):
     p_obj = DataPartition(partitions, n_segments=centered_skeleton.shape[1])
 
     r_radial_velocities = {}
     r_angular_velocities = {}
+    
     for p in partitions:
         segment_coords = p_obj.apply(centered_skeleton, p, func=np.mean)
         r_radial_velocity, r_angular_velocity = _h_relative_velocity(segment_coords, delta_frames, fps)
         r_radial_velocities[p] = r_radial_velocity
         r_angular_velocities[p] = r_angular_velocity
+        
+        
     
     return r_radial_velocities, r_angular_velocities
+
+
+def get_relative_speed_midbody(centered_skeleton, partitions, delta_frames, fps):
+    p_obj = DataPartition(['midbody'], n_segments=centered_skeleton.shape[1])
+    segment_coords = p_obj.apply(centered_skeleton, 'midbody', func=np.mean)
+    return _h_get_velocity(segment_coords[:, 0], delta_frames, fps)
+
 #%%
 import matplotlib.pylab as plt
 from matplotlib import animation, patches
@@ -155,36 +167,31 @@ def animate_velocity(skel_a, ini_arrow, arrow_size, speed_v, ang_v):
 #%%
 def get_velocity_features(skeletons, delta_time, fps):
     
-    partitions = ['head_tip', 'head', 'neck', 'hips', 'tail', 'tail_tip']
+    partitions = ['head_tip', 'neck', 'hips', 'tail_tip']
     
     delta_frames = int(round(fps*delta_time))
 
     
 
     signed_speed_body, angular_velocity_body, centered_skeleton = get_velocity(skeletons, 'body', delta_frames, fps)
-    signed_speed_midbody, angular_velocity_midbody, _ = get_velocity(skeletons, 'midbody', delta_frames, fps)
-    
     r_radial_velocities, r_angular_velocities = \
         get_relative_velocities(centered_skeleton, 
                                     partitions, 
                                     delta_frames, 
                                     fps)
+    relative_speed_midbody = get_relative_speed_midbody(centered_skeleton, partitions, delta_frames, fps)
     
     velocities = OrderedDict(
             [
                 ('speed',signed_speed_body),
-                ('speed_midbody',signed_speed_midbody),
                 ('angular_velocity',angular_velocity_body),
-                ('angular_velocity_midbody',angular_velocity_midbody)
+                ('relative_speed_midbody', relative_speed_midbody)
                 ]
             )
     
     for p in partitions:
-        velocities['relative_radial_velocity_' + p] = r_radial_velocities[p]
-        
-    for p in partitions:
+        velocities['relative_radial_velocity_' + p] = r_radial_velocities[p]    
         velocities['relative_angular_velocity_' + p] = r_angular_velocities[p]
-    
     
     
     #get into data frame

@@ -220,7 +220,7 @@ def get_posture_features(skeletons, curvature_window = 4):
     #repack into an ordered dictionary
     data = OrderedDict(
         [
-        ('lengths' , lengths),
+        ('length' , lengths),
         ('head_tail_distance' , head_tail_dist),
         ('quirkiness' , quirkiness),
         ('major_axis' , major_axis),

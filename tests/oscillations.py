@@ -33,7 +33,8 @@ if __name__ == '__main__':
     #%%
     #x = feat_posture['curvature_midbody'].values
     #x = velocities['speed'].values
-    x = np.sin(ts/5)# + np.sin(ts/5)
+    ts = np.arange(1000)
+    x = np.sin(ts*2*np.pi/5) + np.sin(ts*2*np.pi/25)
     valid, = np.where(~np.isnan(x))
     
     t_i = np.hstack([-1, valid, x.shape[0]])
@@ -42,48 +43,20 @@ if __name__ == '__main__':
     
     ts = np.arange(x.shape[0])
     xs = f(ts)
-    
-    widths = np.arange(1, 125)
-    cwtmatr, freqs = pywt.cwt(xs, widths, 'morl')
-    
-    #cA, cD = pywt.dwt(xs, 'haar')
-    
-    plt.figure()
-    plt.subplot(2,1,1)
-    plt.imshow(np.abs(cwtmatr[:, :2000])**2, interpolation='none')
-    plt.subplot(2,1,2)
-    plt.plot(x[:2000])
-    
-    plt.figure()
-    plt.plot(np.max(cwtmatr,0))
+     
     
     #%%
-#    window_size = 500
-#    wh = np.hamming(window_size)
-#    
-#    dat = []
-#    for ii in range(xs.size-window_size):
-#        ws = xs[ii: ii + window_size]*wh
-#        dd = np.fft.rfft(ws)
-#        dat.append(np.abs(dd))
-#    dat = np.array(dat).T
-    #plt.subplot(3,1,3)
-    #plt.imshow(np.log10(dat**2)[:, :2000], interpolation='none')
+    import pycwt as wavelet
     
-    #plt.plot(np.abs(np.fft.rfft(ws)))
+    dt = 1
+    mother = wavelet.Morlet(6)
+    s0 = 2 * dt  # Starting scale, in this case 2 * 0.25 years = 6 months
+    dj = 1 / 12  # Twelve sub-octaves per octaves
+    J = 10 / dj  # Seven powers of two with dj sub-octaves
+    #alpha, _, _ = wavelet.ar1(dat)  # Lag-1 autocorrelation for red noise
+
+    mother = wavelet.Morlet(6)
+    wave, scales, freqs, coi, fft, fftfreqs = wavelet.cwt(xs, dt, dj, s0, J,
+                                                      mother)
+    plt.imshow(np.abs(wave)**2, aspect='auto')
     
-    #np.fft.rfft(x)
-    #%%
-    x = feat_posture['curvature_midbody'].values
-    delta_frames= int(round(fps*delta_time))
-    x_v = _h_get_velocity(x, delta_frames, fps)
-    tt = np.arange(x_v.size)
-    plt.subplot(2,1,1)
-    plt.plot(tt, x_v)
-        
-    plt.subplot(2,1,1)
-    plt.xlim(3000,3500)
-    
-    plt.subplot(2,1,2)
-    plt.plot(x)
-    plt.xlim(3000,3500)
