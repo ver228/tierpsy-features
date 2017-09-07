@@ -170,7 +170,9 @@ def get_velocity_features(skeletons, delta_time, fps):
     partitions = ['head_tip', 'neck', 'hips', 'tail_tip']
     
     delta_frames = int(round(fps*delta_time))
-
+    if skeletons.shape[0] < delta_frames:
+        return
+    
     
 
     signed_speed_body, angular_velocity_body, centered_skeleton = get_velocity(skeletons, 'body', delta_frames, fps)

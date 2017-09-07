@@ -205,6 +205,10 @@ class SmoothedWorm():
     def _h_interp_and_smooth(self, x, y, x_pred, s_win):
         f = interp1d(x, y)
         y_interp = f(x_pred)
+
+        if y_interp.size <= s_win:
+            return y_interp
+
         y_smooth = savgol_filter(y_interp, s_win, self.pol_degree)
         return y_smooth
 
@@ -233,6 +237,7 @@ class SmoothedWorm():
             for i_coord in range(2):
                 c = dat_all[:, i_seg, i_coord]
                 c = np.hstack([c[0], c, c[-1]])
+
                 c_s = self._h_interp_and_smooth(tt, c, frames_to_interpolate, s_win)
                 dat_all_s[:, i_seg, i_coord] = c_s
                 

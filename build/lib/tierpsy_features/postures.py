@@ -206,7 +206,7 @@ def get_quirkiness(skeletons):
 def get_head_tail_dist(skeletons):
     return np.linalg.norm(skeletons[:, 0, :] - skeletons[:, -1, :], axis=1)
 #%%
-def get_posture_features(skeletons, curvature_window = 4):
+def get_posture_features(skeletons, curvature_window):
     
     
     head_tail_dist = get_head_tail_dist(skeletons)

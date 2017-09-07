@@ -5,8 +5,9 @@ Created on Tue Sep  5 16:54:05 2017
 
 @author: ajaver
 """
+
+from tierpsy_features import get_timeseries_features
 import numpy as np
-from tierpsy_features import get_velocity_features, get_morphology_features, get_posture_features
 
 if __name__ == '__main__':
     #data = np.load('../notebooks/data/worm_example.npz')
@@ -18,25 +19,17 @@ if __name__ == '__main__':
     ventral_contours = data['ventral_contour']
     widths = data['widths']
     
-    feat_morph = get_morphology_features(skeletons, widths, dorsal_contours, ventral_contours)
-    feat_posture = get_posture_features(skeletons, curvature_window = 4)
-    
-    #I am still missing the velocity and path features but it should look like this
-    cols_to_use = [x for x in feat_posture.columns if x not in feat_morph] #avoid duplicate length
-    
-    features = feat_morph.join(feat_posture[cols_to_use])
-    
-    
-    fps = 25
-    delta_time = 1/3 #delta time in seconds to calculate the velocity
-    velocities = get_velocity_features(skeletons, delta_time, fps)
-    
-    
-    features = features.join(velocities)
-     
+    timeseries_features = get_timeseries_features(
+            skeletons, 
+            widths, 
+            dorsal_contours, 
+            ventral_contours,
+            fps = 25
+            )
+
     
     #%%
-    corr_mat = features.corr()
+    corr_mat = timeseries_features.corr()
     #corr_mat = features.corr('spearman')
     gg = [corr_mat.index[corr_mat[col].abs()>0.9] for col in corr_mat]
     gg = [list(x) for x in gg if len(x) > 1]

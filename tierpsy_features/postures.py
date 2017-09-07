@@ -10,10 +10,9 @@ import tables
 import warnings
 import cv2
 import pandas as pd
-
 from collections import OrderedDict
 
-from tierpsy_features.helper import DataPartition, nanunwrap
+from tierpsy_features.helper import DataPartition
 from tierpsy_features import EIGEN_PROJECTION_FILE
 
 #%% Morphology Features
@@ -77,94 +76,6 @@ def get_morphology_features(skeletons, widths, dorsal_contours, ventral_contours
     data = pd.DataFrame.from_dict(data)
     return data
 
-#%% properties
-def _h_tangent_angles(skels, points_window):
-    '''this is a vectorize version to calculate the angles between segments
-    segment_size points from each side of a center point.
-    '''
-    s_center = skels[:, points_window:-points_window, :] #center points
-    s_left = skels[:, :-2*points_window, :] #left side points
-    s_right = skels[:, 2*points_window:, :] #right side points
-    
-    d_left = s_left - s_center 
-    d_right = s_center - s_right
-    
-    #arctan2 expects the y,x angle
-    ang_l = np.arctan2(d_left[...,1], d_left[...,0])
-    ang_r = np.arctan2(d_right[...,1], d_right[...,0])
-    
-    with warnings.catch_warnings():
-        #I am unwraping in one dimension first
-        warnings.simplefilter("ignore")
-        ang = np.unwrap(ang_r-ang_l, axis=1);
-    
-    for ii in range(ang.shape[1]):
-        ang[:, ii] = nanunwrap(ang[:, ii])
-    return ang
-
-def _h_curvature(skeletons, points_window, lengths=None):
-    if lengths is None:
-        #caculate the length if it is not given
-        lengths = get_length(skeletons)
-    
-    #Number of segments is the number of vertices minus 1
-    n_segments = skeletons.shape[1] -1 
-    
-    #This is the fraction of the length the angle is calculated on
-    length_frac = 2*(points_window-1)/(n_segments-1)
-    segment_length = length_frac*lengths
-    segment_angles = _h_tangent_angles(skeletons, points_window)
-    
-    curvature = segment_angles/segment_length[:, None]
-    
-    return curvature
-    
-def get_curvature(skeletons, points_window, lengths=None):
-    segments_ind_dflt = {
-        'head' : 0,
-        'neck' : 0.25,
-        'midbody' : 0.5, 
-        'hips' : 0.75,
-        'tail' : 1.,
-    }
-    
-    curvatures = _h_curvature(skeletons, points_window, lengths)
-    max_angle_index = curvatures.shape[-1]-1
-    segments_ind = {k:int(round(x*max_angle_index)) for k,x in segments_ind_dflt.items()}
-    
-    curv_dict = {x:curvatures[:, ind] for x,ind in segments_ind.items()}
-    return curv_dict
-
-
-def _h_curvature_test(skeletons):
-    '''
-    Calculate the curvature using univariate splines. This method is slower and can fail
-    badly if the fit does not work, so I am only using it as testing
-    '''
-    from scipy.interpolate import UnivariateSpline
-    
-    def _get_curvature(skel):
-        if np.any(np.isnan(skel)):
-            return np.full(skel.shape[0], np.nan)
-        
-        x = skel[:, 0]
-        y = skel[:, 1]
-        n = np.arange(x.size)
-    
-        fx = UnivariateSpline(n, x, k=5)
-        fy = UnivariateSpline(n, y, k=5)
-    
-        x_d = fx.derivative(1)(n)
-        x_dd = fx.derivative(2)(n)
-        y_d = fy.derivative(1)(n)
-        y_dd = fy.derivative(2)(n)
-        curvature = (x_d*y_dd - y_d*x_dd) / np.power(x_d** 2 + y_d** 2, 3 / 2)
-        return  curvature
-    
-    
-    curvatures_fit = np.array([_get_curvature(skel) for skel in skeletons])
-    return curvatures_fit
-
 
 #%%
 def _h_angles(skeletons):
@@ -206,7 +117,7 @@ def get_quirkiness(skeletons):
 def get_head_tail_dist(skeletons):
     return np.linalg.norm(skeletons[:, 0, :] - skeletons[:, -1, :], axis=1)
 #%%
-def get_posture_features(skeletons, curvature_window = 4):
+def get_posture_features(skeletons):
     
     
     head_tail_dist = get_head_tail_dist(skeletons)
@@ -214,7 +125,6 @@ def get_posture_features(skeletons, curvature_window = 4):
     
     #I prefer to explicity recalculate the lengths, just to do not have to pass the length information
     lengths = get_length(skeletons)
-    curvature = get_curvature(skeletons, curvature_window, lengths=lengths)
     eigen_projections = get_eigen_projections(skeletons)
     
     #repack into an ordered dictionary
@@ -228,9 +138,6 @@ def get_posture_features(skeletons, curvature_window = 4):
         ]
     )
     
-    for p in curvature:
-        data['curvature_' + p] = curvature[p]
-        
     for n in range(eigen_projections.shape[1]):
         data['eigen_projection_' + str(n+1)] = eigen_projections[:, n]
     

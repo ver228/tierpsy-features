@@ -59,4 +59,27 @@ if __name__ == '__main__':
     wave, scales, freqs, coi, fft, fftfreqs = wavelet.cwt(xs, dt, dj, s0, J,
                                                       mother)
     plt.imshow(np.abs(wave)**2, aspect='auto')
+    #%%
     
+    right_side = np.pad(skels[:, :-w_s, :], ((0,0), (w_s, 0), (0,0)), 'edge')
+    left_side = np.pad(skels[:, w_s:, :], ((0,0), (0, w_s), (0,0)), 'edge')
+
+    #%%
+    X = skels
+    
+    w_s = 2*points_window
+    right_side = np.pad(X[:, :-w_s, :], ((0,0), (w_s, 0), (0,0)), 'edge')
+    left_side = np.pad(X[:, w_s:, :], ((0,0), (0, w_s), (0,0)), 'edge')
+
+    ramp = np.full(X.shape[1] - w_s, w_s)
+    ramp = np.pad(ramp, 
+                    pad_width = (points_window, points_window), 
+                    mode='linear_ramp',  
+                    end_values = points_window
+                    )
+    grad = (left_side - right_side)/ramp[None, :, None]
+    #%%
+    nn = 2000
+    plt.figure()
+    plt.plot(left_side[nn, :, 0], 'o-'); 
+    plt.plot(right_side[nn, :, 0], '.-'); 
