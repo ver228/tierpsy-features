@@ -48,7 +48,7 @@ def averages_by_time(df, fps):
 if __name__ == '__main__':
 
     #fname = '/Volumes/behavgenom_archive$/Solveig/All/Results/Experiment1/170713_deve_1/deve_1_day1_Set0_Pos0_Ch1_13072017_140054_featuresN.hdf5'
-    dname = '/Volumes/behavgenom_archive$/Solveig/All/Results/Experiment2'
+    dname = '/Volumes/behavgenom_archive$/Solveig/All/Results/'
     
     fnames = glob.glob(os.path.join(dname, '**', '*_featuresN.hdf5'), recursive = True)
     
@@ -118,16 +118,6 @@ if __name__ == '__main__':
                 plt.plot(cohort_dat[ii][feat][stat], c = strC[ii])
                 plt.title(stat)
         plt.suptitle(feat)
-    
-                
-            
-            
-    
-    
-    
-    
-    
-    
     
         #%%
 #   fig, axes = plt.subplots(nrows=2, ncols=1)
