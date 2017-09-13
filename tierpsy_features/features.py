@@ -5,15 +5,26 @@ Created on Tue Aug 22 22:01:03 2017
 
 @author: ajaver
 """
-from .velocities import get_velocity_features
-from .postures import get_morphology_features, get_posture_features
-from .curvatures import get_curvature_features
+import pandas as pd
 
+from tierpsy_features.velocities import get_velocity_features, velocities_columns
+from tierpsy_features.postures import get_morphology_features, morphology_columns, \
+get_posture_features, posture_columns
+
+from tierpsy_features.curvatures import get_curvature_features, curvature_columns
+from tierpsy_features.food import get_cnt_feats, food_columns
+
+all_columns = velocities_columns + morphology_columns + posture_columns + \
+                curvature_columns + food_columns
+
+#%%
 def get_timeseries_features(skeletons, 
                             widths, 
                             dorsal_contours, 
                             ventral_contours,
                             fps,
+                            food_cnt = None,
+                            is_smooth_cnt = False,
                             delta_time = 1/3, #delta time in seconds to calculate the velocity
                             curvature_window = 1
                             ):
@@ -28,9 +39,20 @@ def get_timeseries_features(skeletons,
     
     curvatures = get_curvature_features(skeletons, points_window=curvature_window)
     features = features.join(curvatures)
-
+    
     velocities = get_velocity_features(skeletons, delta_time, fps)
     if velocities is not None:
         features = features.join(velocities)
     
+    if food_cnt is not None:
+        food = get_cnt_feats(skeletons, 
+                             food_cnt,
+                             is_smooth_cnt
+                             )
+        features = features.join(food)
+    
+    #add any missing column
+    df = pd.DataFrame([], columns=all_columns)
+    features = pd.concat((df, features), ignore_index=True)
+    features = features[all_columns]
     return features

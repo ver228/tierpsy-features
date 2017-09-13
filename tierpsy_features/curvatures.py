@@ -16,6 +16,9 @@ from scipy.signal import savgol_filter
 from tierpsy_features.helper import nanunwrap
 from tierpsy_features.postures import get_length
 
+curvature_columns = ['curvature_head', 'curvature_hips', 'curvature_midbody',
+       'curvature_neck', 'curvature_tail']
+
 def _h_curvature_angles(skeletons, window_length = None, lengths=None):
     if window_length is None:
         window_length = 7

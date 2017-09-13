@@ -15,6 +15,15 @@ from collections import OrderedDict
 from tierpsy_features.helper import DataPartition
 from tierpsy_features import EIGEN_PROJECTION_FILE
 
+#%%
+
+morphology_columns = ['length', 'area', 'area_length_ratio', 'width_length_ratio',
+       'width_head_base', 'width_midbody', 'width_tail_base']
+posture_columns = ['head_tail_distance', 'quirkiness', 'major_axis',
+       'minor_axis', 'eigen_projection_1', 'eigen_projection_2',
+       'eigen_projection_3', 'eigen_projection_4', 'eigen_projection_5',
+       'eigen_projection_6', 'eigen_projection_7']
+
 #%% Morphology Features
 def get_widths(widths):
     partitions = ['head_base', 'midbody', 'tail_base']
@@ -58,21 +67,31 @@ def get_length(skeletons):
     return w_length
 
 
-def get_morphology_features(skeletons, widths, dorsal_contours, ventral_contours):
-    widths_seg = get_widths(widths)
-    areas = get_area(ventral_contours, dorsal_contours)
-    lengths = get_length(skeletons)
+def get_morphology_features(skeletons, 
+                            widths = None, 
+                            dorsal_contours = None, 
+                            ventral_contours = None):
     
-    data = OrderedDict(
-        [
-        ('length', lengths),
-        ('area' , areas),
-        ('area_length_ratio' , areas/lengths),
-        ('width_length_ratio' , areas/widths_seg['midbody'])
-        ]
-    )
-    for p in widths_seg:
-        data['width_' + p] = widths_seg[p]
+    data = OrderedDict()
+    
+    lengths = get_length(skeletons)
+    data['length'] = lengths
+    
+    areas = None
+    if ventral_contours is not None and dorsal_contours is not None:
+        areas = get_area(ventral_contours, dorsal_contours)
+        data['area'] = areas
+        data['area_length_ratio'] = areas/lengths
+    
+    if widths is not None:
+        widths_seg = get_widths(widths)
+        
+        if areas is not None:
+            data['width_length_ratio'] = areas/widths_seg['midbody']
+        
+        for p in widths_seg:
+            data['width_' + p] = widths_seg[p]
+       
     data = pd.DataFrame.from_dict(data)
     return data
 
@@ -124,13 +143,11 @@ def get_posture_features(skeletons):
     quirkiness, major_axis, minor_axis = get_quirkiness(skeletons)
     
     #I prefer to explicity recalculate the lengths, just to do not have to pass the length information
-    lengths = get_length(skeletons)
     eigen_projections = get_eigen_projections(skeletons)
     
     #repack into an ordered dictionary
     data = OrderedDict(
         [
-        ('length' , lengths),
         ('head_tail_distance' , head_tail_dist),
         ('quirkiness' , quirkiness),
         ('major_axis' , major_axis),

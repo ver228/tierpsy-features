@@ -7,7 +7,17 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict
 
+import matplotlib.pylab as plt
+from matplotlib import animation, patches
+
 from tierpsy_features.helper import DataPartition, nanunwrap
+
+velocities_columns = ['speed', 'angular_velocity', 'relative_speed_midbody',
+       'relative_radial_velocity_head_tip',
+       'relative_angular_velocity_head_tip', 'relative_radial_velocity_neck',
+       'relative_angular_velocity_neck', 'relative_radial_velocity_hips',
+       'relative_angular_velocity_hips', 'relative_radial_velocity_tail_tip',
+       'relative_angular_velocity_tail_tip']
 
 def _h_orientation_vector(x, axis=None):
     return x[:, 0, :] - x[:, -1, :]
@@ -108,8 +118,7 @@ def get_relative_speed_midbody(centered_skeleton, partitions, delta_frames, fps)
     return _h_get_velocity(segment_coords[:, 0], delta_frames, fps)
 
 #%%
-import matplotlib.pylab as plt
-from matplotlib import animation, patches
+
 
 def _h_ax_range(skel_a):
     x_range = [np.nanmin(skel_a[...,0]), np.nanmax(skel_a[...,0])]

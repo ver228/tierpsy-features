@@ -43,7 +43,9 @@ class DataPartition():
                             'tail_base': (41, 44),
                             'tail_tip': (46, 49),
                             'all': (0, 49),
-                            'body': (8, 41)
+                            'hh' : (0, 16),
+                            'tt' : (33, 49),
+                            'body': (8, 41),
                             }
         
         if partitions is None:
