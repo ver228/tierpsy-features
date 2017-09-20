@@ -17,11 +17,24 @@ def fillfnan(arr):
     I define this function so I do not have to call pandas DataFrame
     '''
     out = arr.copy()
-    for idx in range(out.shape[0]):
+    for idx in range(1, out.shape[0]):
         if np.isnan(out[idx]):
             out[idx] = out[idx - 1]
     return out
 
+@numba.jit
+def fillbnan(arr):
+    '''
+    fill foward nan values (iterate using the last valid nan)
+    I define this function so I do not have to call pandas DataFrame
+    '''
+    out = arr.copy()
+    for idx in range(out.shape[0]-1)[::-1]:
+        if np.isnan(out[idx]):
+            out[idx] = out[idx+1]
+    return out
+
+@numba.jit
 def nanunwrap(x):
     '''correct for phase change for a vector with nan values 
     '''

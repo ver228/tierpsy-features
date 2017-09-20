@@ -45,8 +45,8 @@ def _h_smooth_cnt(food_cnt, resampling_N = 1000, smooth_window=None, _is_debug=F
     ry = fy(subLengths)
     
     pol_degree = 3
-    rx = savgol_filter(rx, smooth_window, pol_degree)
-    ry = savgol_filter(ry, smooth_window, pol_degree)
+    rx = savgol_filter(rx, smooth_window, pol_degree, mode='wrap')
+    ry = savgol_filter(ry, smooth_window, pol_degree, mode='wrap')
     
     food_cnt_s = np.stack((rx, ry), axis=1)
     
@@ -60,10 +60,10 @@ def _h_smooth_cnt(food_cnt, resampling_N = 1000, smooth_window=None, _is_debug=F
     
     return food_cnt_s
 
-
+#%%
 def _h_get_unit_vec(x):
     return x/np.linalg.norm(x, axis=1)[:, np.newaxis]
-
+#%%
 def get_cnt_feats(skeletons, 
                   food_cnt,
                   is_smooth_cnt = True,
@@ -71,7 +71,7 @@ def get_cnt_feats(skeletons,
     
     if is_smooth_cnt:
         food_cnt = _h_smooth_cnt(food_cnt)
-    
+    #%%
     worm_coords, orientation_v = _h_segment_position(skeletons, partition = 'body')
     
     rr = np.linalg.norm(worm_coords[:, None, :] - food_cnt[None, ...], axis=2)
@@ -80,15 +80,11 @@ def get_cnt_feats(skeletons,
     bbPath = mplPath.Path(food_cnt)
     outside = ~bbPath.contains_points(worm_coords)
     dist_from_cnt[outside] = -dist_from_cnt[outside]
-    
     worm_u = _h_get_unit_vec(orientation_v)
-    
-    
-    
+    #%%
     top = cnt_ind+1
     top[top>=food_cnt.shape[0]] -= food_cnt.shape[0] #fix any overflow index
     bot = cnt_ind-1 #it is not necessary to correct because we can use negative indexing
-    
     
     #I am using the normal vector so the orientation can be calculated between -90 and 90
     #positive if the worm is pointing towards the food center and negative if it is looking out
@@ -99,9 +95,10 @@ def get_cnt_feats(skeletons,
     dot_prod = np.sum(food_u*worm_u, axis=1) 
     orientation_food_cnt = 90-np.arccos(dot_prod)*180/np.pi
     
+    #%%
     dd = np.array([orientation_food_cnt, dist_from_cnt]).T
     food_df = pd.DataFrame(dd, columns = food_columns)
-    
+    #%%
     if _is_debug:
         import matplotlib.pylab as plt
         plt.figure(figsize=(24,12))
