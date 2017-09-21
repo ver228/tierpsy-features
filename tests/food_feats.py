@@ -19,8 +19,9 @@ if __name__ == '__main__':
 
     #skeletons_file = '/Users/ajaver/Documents/GitHub/tierpsy-tracker/tests/data/_TEST/N2_worms10_CSCD563206_10_Set9_Pos4_Ch6_25072017_214236_skeletons.hdf5'
     #skeletons_file = '/Users/ajaver/Documents/GitHub/tierpsy-tracker/tests/data/_TEST/N2_worms10_CSCD438313_10_Set12_Pos5_Ch4_25072017_223347_skeletons.hdf5'
-    skeletons_file = '/Users/ajaver/Documents/GitHub/tierpsy-tracker/tests/data/_TEST/MY23_worms5_food1-10_Set4_Pos5_Ch4_29062017_140148_skeletons.hdf5'
-    #skeletons_file = '/Volumes/behavgenom_archive$/Solveig/Results/Experiment8/170822_matdeve_exp8co3/170822_matdeve_exp8co3_12_Set0_Pos0_Ch1_22082017_140000_skeletons.hdf5'
+    #skeletons_file = '/Users/ajaver/Documents/GitHub/tierpsy-tracker/tests/data/_TEST/MY23_worms5_food1-10_Set4_Pos5_Ch4_29062017_140148_skeletons.hdf5'
+    skeletons_file = '/Volumes/behavgenom_archive$/Solveig/Results/Experiment8/170822_matdeve_exp8co3/170822_matdeve_exp8co3_12_Set0_Pos0_Ch1_22082017_140000_skeletons.hdf5'
+    
     
     features_file = skeletons_file.replace('_skeletons.hdf5', '_featuresN.hdf5')
     
@@ -33,6 +34,9 @@ if __name__ == '__main__':
     trajectories_data = trajectories_data[trajectories_data['skeleton_id']>-1]
     
     for worm_index, worm_data in trajectories_data.groupby('worm_index_joined'):
+        if worm_index != 2:
+            continue
+        
         skel_id = worm_data['skeleton_id'].values 
         #%%
         with tables.File(features_file, 'r') as fid:
@@ -48,7 +52,7 @@ if __name__ == '__main__':
             continue
         
         
-        outputs = get_timeseries_features(skeletons, 
+        timeseries_features = get_timeseries_features(skeletons, 
                                           widths, 
                                           dorsal_contours, 
                                           ventral_contours,
