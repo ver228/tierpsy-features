@@ -64,6 +64,15 @@ def _h_segment_position(skeletons, partition):
 def get_velocity(skeletons, partition, delta_frames, fps, _is_plot = False):
     coords, orientation_v = _h_segment_position(skeletons, partition = partition)
     
+    if np.any(np.isnan(coords[:, 0])):
+    
+        x = np.arange(coords.shape[0])
+        xp = np.where(~np.isnan(coords[:, 0]))[0]
+        
+        for ii in range(coords.shape[1]):
+            coords[:, ii] = np.interp(x, xp, coords[xp, ii])
+            orientation_v[:, ii] = np.interp(x, xp, orientation_v[xp, ii])
+    
     velocity = _h_get_velocity(coords, delta_frames, fps)
     speed = np.linalg.norm(velocity, axis=1)
     #I do not need to normalize the vectors because it will only add a constant factor, 
@@ -78,7 +87,7 @@ def get_velocity(skeletons, partition, delta_frames, fps, _is_plot = False):
     angular_velocity = _h_get_velocity(orientation, delta_frames, fps)
     
     centered_skeleton = _h_center_skeleton(skeletons, orientation, coords)
-    
+    #%%
     return signed_speed, angular_velocity, centered_skeleton
 
 #%%

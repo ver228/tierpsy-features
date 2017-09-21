@@ -122,13 +122,15 @@ if __name__ == '__main__':
         plt.plot(food_position*edge_offset_lower)
 
     #%%
+        #angular_velocity = timeseries_features.loc[good, 'angular_velocity'].values
+        angular_velocity = timeseries_features['angular_velocity'].values
         smooth_window = int(round(fps*2))  
-        angular_velocity = timeseries_features.loc[good, 'angular_velocity'].values
+        
         dd = angular_velocity.copy()
         dd[np.isnan(dd)] = 0
         dd = dd.cumsum()
         
-        smoothed_vec = pd.Series(dd).rolling(window=smooth_window,center=True).mean()
+        #smoothed_vec = pd.Series(dd).rolling(window=smooth_window,center=True).mean()
         
         #%%
         plt.figure()
