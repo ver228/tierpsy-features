@@ -11,6 +11,9 @@ import pandas as pd
 
 
 def _get_pulses_indexes(light_on, min_window_size=0):
+    '''
+    Get the start and end of a given pulse.
+    '''
     switches = np.diff(light_on.astype(np.int))
     turn_on, = np.where(switches==1)
     turn_off, = np.where(switches==-1)
@@ -24,6 +27,12 @@ def _get_pulses_indexes(light_on, min_window_size=0):
     return turn_on[good], turn_off[good]
 
 def _range_vec(vec, th):
+    '''
+    flag a vector depending on the threshold, th
+    -1 if the value is below -th
+    1 if the value is above th
+    0 if it is between -th and th
+    '''
     flags = np.zeros(vec.size)
     _out = vec < -th
     _in = vec > th
@@ -31,15 +40,32 @@ def _range_vec(vec, th):
     flags[_in] = 1
     return flags
 
-def _flag_regions(vec, lower_th, higher_th, smooth_window, min_zero_window):
+def _flag_regions(vec, central_th, extrema_th, smooth_window, min_frame_range):
+    '''
+    Flag a frames into lower (-1), central (0) and higher (1) regions.
+    
+    The strategy is
+        1) Smooth the timeseries by smoothed window
+        2) Find frames that are certainly lower or higher using extrema_th
+        3) Find regions that are between (-central_th, central_th) and 
+            and last more than min_zero_window. This regions are certainly
+            central regions.  
+        4) If a region was not identified as central, but contains 
+            frames labeled with a given extrema, label the whole region 
+            with the corresponding extrema.
+    '''
     vv = pd.Series(vec).fillna(method='ffill').fillna(method='bfill')
     smoothed_vec = vv.rolling(window=smooth_window,center=True).mean()
     
-    paused_f = (smoothed_vec > -lower_th) & (smoothed_vec < lower_th)
-    flag_modes = _range_vec(smoothed_vec, higher_th)
     
-    turn_on, turn_off = _get_pulses_indexes(paused_f, min_zero_window)
+    
+    paused_f = (smoothed_vec > -central_th) & (smoothed_vec < central_th)
+    turn_on, turn_off = _get_pulses_indexes(paused_f, min_frame_range)
     inter_pulses = zip([0] + list(turn_off), list(turn_on) + [paused_f.size-1])
+    
+    
+    flag_modes = _range_vec(smoothed_vec, extrema_th)
+    
     for ini, fin in inter_pulses:
         dd = np.unique(flag_modes[ini:fin+1])
         dd = [x for x in dd if x != 0]
