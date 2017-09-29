@@ -14,8 +14,31 @@ get_posture_features, posture_columns
 from tierpsy_features.curvatures import get_curvature_features, curvature_columns
 from tierpsy_features.food import get_cnt_feats, food_columns
 
-all_columns = velocities_columns + morphology_columns + posture_columns + \
+timeseries_columns = velocities_columns + morphology_columns + posture_columns + \
                 curvature_columns + food_columns
+
+ventral_signed_columns = [
+    'relative_speed_midbody',
+    'relative_angular_velocity_head_tip',
+    'relative_angular_velocity_neck',
+    'relative_angular_velocity_hips', 
+    'relative_angular_velocity_tail_tip', 
+    'eigen_projection_1', 
+    'eigen_projection_2', 
+    'eigen_projection_3', 
+    'eigen_projection_4', 
+    'eigen_projection_5', 
+    'eigen_projection_6', 
+    'eigen_projection_7', 
+    'curvature_head', 
+    'curvature_hips', 
+    'curvature_midbody', 
+    'curvature_neck', 
+    'curvature_tail'
+    ]
+
+#all the ventral_signed_columns must be in timeseries_columns
+assert len(set(ventral_signed_columns) - set(timeseries_columns))  == 0 
 
 #%%
 def get_timeseries_features(skeletons, 
@@ -52,7 +75,7 @@ def get_timeseries_features(skeletons,
         features = features.join(food)
     
     #add any missing column
-    df = pd.DataFrame([], columns=all_columns)
+    df = pd.DataFrame([], columns=timeseries_columns)
     features = pd.concat((df, features), ignore_index=True)
-    features = features[all_columns]
+    features = features[timeseries_columns]
     return features
