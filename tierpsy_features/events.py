@@ -95,19 +95,27 @@ def _get_vec_durations(event_vec):
     for e_id in np.unique(event_vec):
         ini_e, fin_e = _get_pulses_indexes(event_vec == e_id, is_pad = True)
         event_durations = fin_e - ini_e
-        event_ids = np.full(event_durations.shape, e_id)
-        durations_list.append(np.stack((event_durations, event_ids)).T)
         
-    event_durations_df = pd.DataFrame(np.concatenate(durations_list), columns = ['duration', 'region'])
+        #flag if the event is on the vector edge or not
+        edge_flag = np.zeros_like(fin_e)
+        edge_flag[ini_e <= 0] = -1
+        edge_flag[fin_e >= event_vec.size-1] = 1
+        
+        event_ids = np.full(event_durations.shape, e_id)
+        durations_list.append(np.stack((event_ids, event_durations, ini_e, fin_e, edge_flag)).T)
+    
+    cols = ['region', 'duration', 'timestamp_initial', 'timestamp_final', 'edge_flag']
+    event_durations_df = pd.DataFrame(np.concatenate(durations_list), columns = cols)
     return event_durations_df
 
-def _get_event_durations(events_df, fps):
+def get_event_durations(events_df, fps):
     event_durations_list = []
     for col in events_df:
-        dd = _get_vec_durations(events_df[col].values)
-        dd['event_type'] = col
-        event_durations_list.append(dd)
-    
+        if col != 'timestamp':
+            dd = _get_vec_durations(events_df[col].values)
+            dd.insert(0, 'event_type', col)
+            event_durations_list.append(dd)
+
     if len(event_durations_list) == 0:
         event_durations_df = pd.DataFrame()
     else:
@@ -117,38 +125,53 @@ def _get_event_durations(events_df, fps):
     return event_durations_df
 
 
-def get_events(speed, dist_from_food_edge, fps, worm_length, _is_debug=False):
+def get_events(df, fps, worm_length = None, _is_debug=False):
+    
+    #initialize data
     smooth_window_s = 0.5
     min_paused_win_speed_s = 1/3
     
+    if worm_length is None:
+        assert 'length' in df
+        worm_length = df['length'].median()
+    
+    
+    df = df.sort_values(by='timestamp')
     
     w_size = int(round(fps*smooth_window_s))
     smooth_window = w_size if w_size % 2 == 1 else w_size + 1
     
     #WORM MOTION EVENTS
-    pause_th_lower = worm_length*0.025
-    pause_th_higher = worm_length*0.05
-    min_paused_win_speed = fps/min_paused_win_speed_s
-    
-    motion_mode = _flag_regions(speed, 
-                             pause_th_lower, 
-                             pause_th_higher, 
-                             smooth_window, 
-                             min_paused_win_speed
-                             ) 
+    events_df = pd.DataFrame(df['timestamp'])
+    if 'speed' in df:
+        speed = df['speed'].values
+        pause_th_lower = worm_length*0.025
+        pause_th_higher = worm_length*0.05
+        min_paused_win_speed = fps/min_paused_win_speed_s
+        
+        motion_mode = _flag_regions(speed, 
+                                 pause_th_lower, 
+                                 pause_th_higher, 
+                                 smooth_window, 
+                                 min_paused_win_speed
+                                 ) 
+        events_df['motion_mode'] = motion_mode
     
     #FOOD EDGE EVENTS
-    edge_offset_lower = worm_length/2
-    edge_offset_higher = worm_length
-    min_paused_win_food_s = 1
-    
-    min_paused_win_food = fps/min_paused_win_food_s
-    food_region = _flag_regions(dist_from_food_edge, 
-                                 edge_offset_lower, 
-                                 edge_offset_higher, 
-                                 smooth_window, 
-                                 min_paused_win_food
-                                 ) 
+    if 'dist_from_food_edge' in df:
+        dist_from_food_edge = df['dist_from_food_edge'].values
+        edge_offset_lower = worm_length/2
+        edge_offset_higher = worm_length
+        min_paused_win_food_s = 1
+        
+        min_paused_win_food = fps/min_paused_win_food_s
+        food_region = _flag_regions(dist_from_food_edge, 
+                                     edge_offset_lower, 
+                                     edge_offset_higher, 
+                                     smooth_window, 
+                                     min_paused_win_food
+                                     ) 
+        events_df['food_region'] = food_region
     
     if _is_debug:
         plt.figure()
@@ -159,12 +182,9 @@ def get_events(speed, dist_from_food_edge, fps, worm_length, _is_debug=False):
         plt.plot(dist_from_food_edge)
         plt.plot(food_region*edge_offset_lower)
         
-    ## pack data
-    dd = np.vstack((motion_mode, food_region)).T
-    events_df = pd.DataFrame(dd, columns = ['motion_mode', 'food_region'])
     
     #get event durations
-    event_durations_df = _get_event_durations(events_df, fps)
+    event_durations_df = get_event_durations(events_df, fps)
     
     return events_df, event_durations_df       
 
@@ -192,13 +212,10 @@ if __name__ == '__main__':
     #%%
     fps = read_fps(fname)
     for w_index in [2]:#, 69, 431, 437, 608]:
+        worm_data = timeseries_features[timeseries_features['worm_index']==w_index]
+        worm_length = worm_data['length'].median()
         
-        good = timeseries_features['worm_index']==w_index
-        worm_length = timeseries_features.loc[good, 'length'].median()
-        speed = timeseries_features.loc[good, 'speed'].values
-        dist_from_food_edge = timeseries_features.loc[good, 'dist_from_food_edge'].values
-        
-        df = get_events(speed, dist_from_food_edge, fps, worm_length, _is_debug=True)
+        events_df, event_durations_df = get_events(worm_data, fps, _is_debug=True)
     
         #%%
         #angular_velocity = timeseries_features.loc[good, 'angular_velocity'].values
@@ -213,9 +230,9 @@ if __name__ == '__main__':
         
         #%%
         plt.figure()
-        timeseries_features.loc[good, 'curvature_tail'].plot()
-        timeseries_features.loc[good, 'curvature_midbody'].plot()
-        timeseries_features.loc[good, 'curvature_head'].plot()
+        worm_data['curvature_tail'].plot()
+        worm_data['curvature_midbody'].plot()
+        worm_data['curvature_head'].plot()
     #%%
     
     

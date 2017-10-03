@@ -4,3 +4,6 @@
 *.npz
 
 *.pdf
+
+
+tests/anova_tests/**
