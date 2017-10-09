@@ -111,7 +111,7 @@ def _get_vec_durations(event_vec):
 def get_event_durations(events_df, fps):
     event_durations_list = []
     for col in events_df:
-        if col != 'timestamp':
+        if not col in ['timestamp', 'worm_index']:
             dd = _get_vec_durations(events_df[col].values)
             dd.insert(0, 'event_type', col)
             event_durations_list.append(dd)
@@ -119,9 +119,15 @@ def get_event_durations(events_df, fps):
     if len(event_durations_list) == 0:
         event_durations_df = pd.DataFrame()
     else:
+
         event_durations_df = pd.concat(event_durations_list, ignore_index=True)
         event_durations_df['duration'] /= fps
-        
+        #shift timestamps to match the real initial time
+        first_t = events_df['timestamp'].min()
+        event_durations_df['timestamp_initial'] += first_t
+        event_durations_df['timestamp_final'] += first_t
+    
+    
     return event_durations_df
 
 
@@ -142,13 +148,13 @@ def get_events(df, fps, worm_length = None, _is_debug=False):
     smooth_window = w_size if w_size % 2 == 1 else w_size + 1
     
     #WORM MOTION EVENTS
-    events_df = pd.DataFrame(df['timestamp'])
+    events_df = pd.DataFrame(df[['worm_index', 'timestamp']])
     if 'speed' in df:
         speed = df['speed'].values
         pause_th_lower = worm_length*0.025
         pause_th_higher = worm_length*0.05
         min_paused_win_speed = fps/min_paused_win_speed_s
-        
+
         motion_mode = _flag_regions(speed, 
                                  pause_th_lower, 
                                  pause_th_higher, 

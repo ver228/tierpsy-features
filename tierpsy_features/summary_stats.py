@@ -12,6 +12,44 @@ import numpy as np
 from tierpsy_features.events import get_events
 from tierpsy_features.features import timeseries_columns, ventral_signed_columns
 
+def _normalize_by_w_length(features_timeseries):
+    #%%
+    features_timeseries = features_timeseries.copy()
+    
+    median_length = features_timeseries.groupby('worm_index').agg({'length':'median'})
+    median_length_vec = features_timeseries['worm_index'].map(median_length['length'])
+    
+    feats2norm = [
+           'speed',
+           'relative_speed_midbody', 
+           'relative_radial_velocity_head_tip',
+           'relative_radial_velocity_neck',
+           'relative_radial_velocity_hips',
+           'relative_radial_velocity_tail_tip',
+           'head_tail_distance',
+           'major_axis', 
+           'minor_axis', 
+           'dist_from_food_edge'
+           ]
+
+    for f in feats2norm:
+        features_timeseries[f] /= median_length_vec
+    
+    curv_feats = ['curvature_head',
+                   'curvature_hips', 
+                   'curvature_midbody', 
+                   'curvature_neck',
+                   'curvature_tail']
+    
+    
+    for f in curv_feats:
+        features_timeseries[f] *= median_length_vec
+        
+    changed_feats = {x: x + '_norm' for x in feats2norm + curv_feats}    
+    features_timeseries = features_timeseries.rename(columns = changed_feats)
+    
+    return features_timeseries, changed_feats
+
 def get_n_worms_estimate(frame_numbers, percentile = 99):
     '''
     Get an estimate of the number of worms using the table frame_numbers vector
@@ -29,12 +67,21 @@ def get_n_worms_estimate(frame_numbers, percentile = 99):
 def get_df_quantiles(df, 
                      ventral_side = None, 
                      feats2abs = ventral_signed_columns,
-                     feats2check = timeseries_columns):
+                     feats2check = timeseries_columns,
+                     is_normalize = False
+                     ):
     '''
     Get quantile statistics for all the features given by `feats2check`.
     In the features in `feats2abs` we are going to use only the absolute. This is to 
     deal with worms with unknown dorsal/ventral orientation.
     '''
+    
+    if is_normalize:
+        df, changed_feats = _normalize_by_w_length(df)
+        feats2abs = [x if not x in changed_feats else changed_feats[x] for x in feats2abs]
+        feats2check = [x if not x in changed_feats else changed_feats[x] for x in feats2check]
+        
+    
     
     q_vals = [0.1, 0.5, 0.9]
     iqr_limits = [0.25, 0.75]
@@ -95,7 +142,7 @@ def get_event_stats(event_durations, n_worms_estimate, total_time):
     
     region_labels = {
             'motion_mode': {-1:'backward', 1:'forward', 0:'paused'}, 
-            'food_region': {-1:'outside', 1:'edge', 0:'inside'}
+            'food_region': {-1:'outside', 1:'inside', 0:'edge'}
             }
     
     tot_times = event_durations.groupby('event_type').agg({'duration':'sum'})['duration']
@@ -129,22 +176,26 @@ def get_event_stats(event_durations, n_worms_estimate, total_time):
     event_stats_s = pd.Series(*list(zip(*event_stats)))
     return event_stats_s
 
-def get_feat_stats(features_timeseries, fps):
+def get_feat_stats(features_timeseries, fps, is_normalize):
     '''
     Get the features statistics from the features_timeseries, from both the
     quantiles and event data.
     '''
-    feat_mean_s = get_df_quantiles(features_timeseries)
-    event_df, event_durations = events_from_df(features_timeseries, fps)
+    
+    feat_mean_s = get_df_quantiles(features_timeseries, is_normalize = is_normalize)
+    
+    event_df, event_durations = events_from_df(features_timeseries.copy(), fps)
     
     n_worms_estimate = get_n_worms_estimate(features_timeseries['timestamp'])
     total_time = (features_timeseries['timestamp'].max() - features_timeseries['timestamp'].min())/fps
     
     event_stats_s = get_event_stats(event_durations, n_worms_estimate, total_time)
     feat_mean_s = feat_mean_s.append(event_stats_s)
+    
+    #%%
     return feat_mean_s
     
-def _get_time_groups(timestamp, time_ranges_m, fps):
+def get_time_groups(timestamp, time_ranges_m, fps):
     '''
     Obtain a vector that divides the timeseries data into groups
     
@@ -174,19 +225,21 @@ def _get_time_groups(timestamp, time_ranges_m, fps):
     
     return time_group
 
-def get_feat_stats_binned(df, fps, time_ranges_m):
+
+
+def get_feat_stats_binned(df, fps, time_ranges_m, is_normalize):
     '''
     Calculate the stats of the features in df using `get_feat_stats` by binning 
     the data according to its time. See `_get_time_groups` to see the kind of 
     values that `time_range_m` accepts.
     '''
-    df['time_group'] = _get_time_groups(df['timestamp'], time_ranges_m, fps)
+    df['time_group'] = get_time_groups(df['timestamp'], time_ranges_m, fps)
     dat_agg = []
     for ind_t, dat in df.groupby('time_group'):
         if ind_t< 0:
             continue
         
-        feat_means_s = get_feat_stats(dat, fps) 
+        feat_means_s = get_feat_stats(dat, fps, is_normalize) 
         
         #add the time information at the begining
         feat_means_s = pd.Series(ind_t, index=['time_group']).append(feat_means_s)
@@ -228,12 +281,12 @@ def collect_feat_stats(fnames, info_df, time_ranges_m = None, is_normalize = Fal
         with pd.HDFStore(fname, 'r') as fid:
             fps = fid.get_storer('/trajectories_data').attrs['fps']
             features_timeseries = fid['/timeseries_features']
-            if is_normalize:
-                _normalize_by_w_length(features_timeseries)
             
         feat_mean_df = get_feat_stats_binned(features_timeseries, 
                                                    fps, 
-                                                   time_ranges_m)
+                                                   time_ranges_m,
+                                                   is_normalize
+                                                   )
         
         #add the info to the feat_means
         dd = pd.concat([info_row] * feat_mean_df.shape[0], axis=1).T
@@ -249,38 +302,6 @@ def collect_feat_stats(fnames, info_df, time_ranges_m = None, is_normalize = Fal
         del feat_means_df['time_group'] 
     
     return feat_means_df
-
-
-def _normalize_by_w_length(features_timeseries):
-    median_length = features_timeseries.groupby('worm_index').agg({'length':'median'})
-    median_length_vec = features_timeseries['worm_index'].map(median_length['length'])
-    
-    feats2norm = [
-           'speed',
-           'relative_speed_midbody', 
-           'relative_radial_velocity_head_tip',
-           'relative_radial_velocity_neck',
-           'relative_radial_velocity_hips',
-           'relative_radial_velocity_tail_tip',
-           'head_tail_distance',
-           'major_axis', 
-           'minor_axis', 
-           'dist_from_food_edge'
-           ]
-
-    for f in feats2norm:
-        features_timeseries[f] /= median_length_vec
-    
-    curv_feats = ['curvature_head',
-                   'curvature_hips', 
-                   'curvature_midbody', 
-                   'curvature_neck',
-                   'curvature_tail']
-    
-    
-    for f in curv_feats:
-        features_timeseries[f] *= median_length_vec
-    
 
 if __name__ == '__main__':
     import glob
@@ -320,7 +341,7 @@ if __name__ == '__main__':
     with pd.HDFStore(fname, 'r') as fid:
         fps = fid.get_storer('/trajectories_data').attrs['fps']
         features_timeseries = fid['/timeseries_features']
-        _normalize_by_w_length(features_timeseries)
+        feat_mean_s = get_df_quantiles(features_timeseries, is_normalize = True)
 #    #%%
 #    event_vector, event_durations = events_from_df(features_timeseries, fps)
 #    #%%
