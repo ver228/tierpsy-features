@@ -152,11 +152,11 @@ def _h_curvature_grad(skeletons, points_window=1, length=None):
     d = _gradient_windowed(skeletons, points_window)
     dd = _gradient_windowed(d, points_window)
     
-    gx = d[:, :, 0]
-    gy = d[:, :, 1]
+    gx = d[..., 0]
+    gy = d[..., 1]
     
-    ggx = dd[:, :, 0]
-    ggy = dd[:, :, 1]
+    ggx = dd[..., 0]
+    ggy = dd[..., 1]
     
     return _curvature_fun(gx, gy, ggx, ggy)
     

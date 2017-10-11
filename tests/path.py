@@ -12,7 +12,46 @@ from scipy.signal import savgol_filter
 
 from tierpsy_features.helper import DataPartition
 
+def _curvature_fun(x_d, y_d, x_dd, y_dd):
+    return (x_d*y_dd - y_d*x_dd)/(x_d*x_d + y_d*y_d)**1.5
+
+def _h_curvature_grad(skeletons, points_window=1, length=None):
+    
+    if points_window is None:
+        points_window = 1
+    
+    if skeletons.shape[0] <= points_window*2:
+        return np.full((skeletons.shape[0], skeletons.shape[1]), np.nan)
+    
+    #this is less noisy than numpy grad
+    def _gradient_windowed(X, points_window):
+        w_s = 2*points_window
+        right_side = np.pad(X[:-w_s, :], ((w_s, 0), (0,0)), 'edge')
+        left_side = np.pad(X[w_s:, :], ((0, w_s), (0,0)), 'edge')
+    
+        ramp = np.full(X.shape[1] - w_s, w_s*2)
+        ramp = np.pad(ramp, 
+                        pad_width = (points_window, points_window), 
+                        mode='linear_ramp',  
+                        end_values = w_s
+                        )
+        grad = (left_side - right_side) / ramp[None, :, None]
+        
+        return grad
+    
+    d = _gradient_windowed(skeletons, points_window)
+    dd = _gradient_windowed(d, points_window)
+    
+    gx = d[..., 0]
+    gy = d[..., 1]
+    
+    ggx = dd[..., 0]
+    ggy = dd[..., 1]
+    
+    return _curvature_fun(gx, gy, ggx, ggy)
+
 def _h_path_curvature(skeletons, path_step = 25, points_window = 10):
+    #%%
     p_obj = DataPartition(n_segments=skeletons.shape[1])
     
     body_coords = p_obj.apply(skeletons, 'body', func=np.mean)
@@ -54,33 +93,66 @@ def _h_path_curvature(skeletons, path_step = 25, points_window = 10):
     xs = fx(sub_lengths)
     ys = fy(sub_lengths)
     ts = ft(sub_lengths)
-    #%% 
+     
     curve = np.vstack((xs, ys)).T
-    s_center = curve[points_window:-points_window] #center points
-    s_left = curve[:-2*points_window] #left side points
-    s_right = curve[2*points_window:] #right side points
+    #%%
+    #this is less noisy than numpy grad
+    def _gradient_windowed(X, points_window):
+        
+        w_s = 2*points_window
+        right_side = np.pad(X[:-w_s, :], ((w_s, 0), (0,0)), 'edge')
+        left_side = np.pad(X[w_s:, :], ((0, w_s), (0,0)), 'edge')
     
+        ramp = np.full(X.shape[0] - w_s, w_s*2)
+        ramp = np.pad(ramp, 
+                        pad_width = (points_window, points_window), 
+                        mode='linear_ramp',  
+                        end_values = w_s
+                        )
+        grad = (left_side - right_side) / ramp[:, None]
+        
+        return grad
+    d = _gradient_windowed(curve, 1)
+    dd = _gradient_windowed(d, 1)
+    gx = d[..., 0]
+    gy = d[..., 1]
     
-    d_left = s_left - s_center 
-    d_right = s_center - s_right
+    ggx = dd[..., 0]
+    ggy = dd[..., 1]
     
-    #arctan2 expects the y,x angle
-    ang_l = np.arctan2(d_left[...,1], d_left[...,0])
-    ang_r = np.arctan2(d_right[...,1], d_right[...,0])
-    ang = np.unwrap(ang_r)-np.unwrap(ang_l)
+    curvature_r =  _curvature_fun(gx, gy, ggx, ggy)
     
-    curvature_r = ang/(path_step*2*points_window)
+    #%%
+#    s_center = curve[points_window:-points_window] #center points
+#    s_left = curve[:-2*points_window] #left side points
+#    s_right = curve[2*points_window:] #right side points
+#    
+#    
+#    d_left = s_left - s_center 
+#    d_right = s_center - s_right
+#    
+#    #arctan2 expects the y,x angle
+#    ang_l = np.arctan2(d_left[...,1], d_left[...,0])
+#    ang_r = np.arctan2(d_right[...,1], d_right[...,0])
+#    ang = np.unwrap(ang_r)-np.unwrap(ang_l)
+#    
+#    curvature_r = ang/(path_step*2*points_window)
     
+    #curvature_r = _h_curvature_grad(curve)
     
-    ts_i = np.hstack((-1, ts[points_window:-points_window], tt[-1] + 1))
+    ts_i = np.hstack((-1, ts, tt[-1] + 1))
     c_i = np.hstack((curvature_r[0], curvature_r, curvature_r[-1]))
     curvature_t = interp1d(ts_i, c_i)(tt)
     
     return curvature_t, body_coords
-
+#%%
 if __name__ == '__main__':
-    #data = np.load('worm_example_small_W1.npz')
-    data = np.load('worm_example.npz')
+    import os
+    
+    base_dir = '/Users/ajaver/OneDrive - Imperial College London/tierpsy_features/test_data/singleworm_skels'
+
+    #data = np.load(os.path.join(base_dir, 'worm_example_small_W1.npz'))
+    data = np.load(os.path.join(base_dir, 'worm_example.npz'))
     skeletons = data['skeleton']
     ventral_contour = data['ventral_contour']
     dorsal_contour = data['dorsal_contour']
@@ -93,6 +165,8 @@ if __name__ == '__main__':
     #%%
     import matplotlib.pylab as plt
     from matplotlib.collections import LineCollection
+    
+    path_curvature = np.clip(path_curvature, -0.01, 0.01)
     
     curv_range = (np.nanmin(path_curvature), np.nanmax(path_curvature))
     
@@ -167,7 +241,7 @@ if __name__ == '__main__':
     
         print(part)
     #%%
-    
+    plt.figure()
     tt = 2500
     plt.plot(ventral_contour[tt,:,0], ventral_contour[tt,:,1])
     plt.plot(dorsal_contour[tt,:,0], dorsal_contour[tt,:,1])
