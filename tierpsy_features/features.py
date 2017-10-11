@@ -14,8 +14,12 @@ get_posture_features, posture_columns
 from tierpsy_features.curvatures import get_curvature_features, curvature_columns
 from tierpsy_features.food import get_cnt_feats, food_columns
 
+from tierpsy_features.path import get_path_curvatures, path_curvature_columns, path_curvature_columns_aux
+
 timeseries_columns = velocities_columns + morphology_columns + posture_columns + \
-                curvature_columns + food_columns
+                curvature_columns + food_columns + path_curvature_columns
+
+aux_columns = path_curvature_columns_aux   
 
 ventral_signed_columns = [
     'relative_speed_midbody',
@@ -74,8 +78,14 @@ def get_timeseries_features(skeletons,
                              )
         features = features.join(food)
     
+    
+    path_curvatures, path_coords = get_path_curvatures(skeletons)
+    features = features.join(path_curvatures)
+    
+    features_aux = path_coords
+    
     #add any missing column
     df = pd.DataFrame([], columns=timeseries_columns)
     features = pd.concat((df, features), ignore_index=True)
     features = features[timeseries_columns]
-    return features
+    return features, features_aux

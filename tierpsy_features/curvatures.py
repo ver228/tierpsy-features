@@ -65,8 +65,6 @@ def _h_curvature_angles(skeletons, window_length = None, lengths=None):
     
     return curvature
 
-def _curvature_fun(x_d, y_d, x_dd, y_dd):
-    return (x_d*y_dd - y_d*x_dd)/(x_d*x_d + y_d*y_d)**1.5
 
 def _h_curvature_savgol(skeletons, window_length = None, length=None):
     '''
@@ -125,43 +123,82 @@ def _h_curvature_spline(skeletons, points_window=None, length=None):
     curvatures_fit = np.array([_spline_curvature(skel) for skel in skeletons])
     return curvatures_fit
 
-def _h_curvature_grad(skeletons, points_window=1, length=None):
+#%%
+def _curvature_fun(x_d, y_d, x_dd, y_dd):
+    return (x_d*y_dd - y_d*x_dd)/(x_d*x_d + y_d*y_d)**1.5
+
+def _gradient_windowed(X, points_window, axis):
+    '''
+    Calculate the gradient using an arbitrary window. The larger window make 
+    this procedure less noisy that the numpy native gradient.
+    '''
+    w_s = 2*points_window
+    
+    #I use slices to deal with arbritary dimenssions 
+    #https://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
+    n_axis_ini = max(0, axis)
+    n_axis_fin = max(0, X.ndim-axis-1)
+    right_slice = [slice(None, None, None)]*n_axis_ini + [slice(None, -w_s, None)]
+    left_slice = [slice(None, None, None)]*n_axis_ini + [slice(w_s, None, None)]
+    
+    right_pad = [(0,0)]*n_axis_ini + [(w_s, 0)] + [(0,0)]*n_axis_fin
+    left_pad = [(0,0)]*n_axis_ini + [(0, w_s)] + [(0,0)]*n_axis_fin
+    
+    right_side = np.pad(X[right_slice], right_pad, 'edge')
+    left_side = np.pad(X[left_slice], left_pad, 'edge')
+    
+    ramp = np.full(X.shape[axis]-2*w_s, w_s*2)
+    
+    ramp = np.pad(ramp,  pad_width = (w_s, w_s),  mode='linear_ramp', end_values = w_s)
+    #ramp = np.pad(ramp,  pad_width = (w_s, w_s),  mode='constant', constant_values = np.nan)
+    ramp_slice = [None]*n_axis_ini + [slice(None, None, None)] + [None]*n_axis_fin
+                 
+    grad = (left_side - right_side) / ramp[ramp_slice] #divide it by the time window
+    
+    return grad
+
+def _h_curvature_grad(curve, points_window=None, axis=1, is_nan_border=True):
+    '''
+    Calculate the curvature using the gradient using differences similar to numpy grad
+    
+    x1, x2, x3
+    
+    grad(x2) = (x3-x1)/2
+    
+    '''
+    
+    #The last element must be the coordinates
+    assert curve.shape[-1] == 2
+    assert axis != curve.ndim - 1    
     
     if points_window is None:
         points_window = 1
     
-    if skeletons.shape[0] <= points_window*2:
-        return np.full((skeletons.shape[0], skeletons.shape[1]), np.nan)
+    if curve.shape[0] <= points_window*4:
+        return np.full((curve.shape[0], curve.shape[1]), np.nan)
     
-    #this is less noisy than numpy grad
-    def _gradient_windowed(X, points_window):
-        w_s = 2*points_window
-        right_side = np.pad(X[:, :-w_s, :], ((0,0), (w_s, 0), (0,0)), 'edge')
-        left_side = np.pad(X[:, w_s:, :], ((0,0), (0, w_s), (0,0)), 'edge')
-    
-        ramp = np.full(X.shape[1] - w_s, w_s*2)
-        ramp = np.pad(ramp, 
-                        pad_width = (points_window, points_window), 
-                        mode='linear_ramp',  
-                        end_values = w_s
-                        )
-        grad = (left_side - right_side) / ramp[None, :, None]
-        
-        return grad
-    
-    d = _gradient_windowed(skeletons, points_window)
-    dd = _gradient_windowed(d, points_window)
+    d = _gradient_windowed(curve, points_window, axis=axis)
+    dd = _gradient_windowed(d, points_window, axis=axis)
     
     gx = d[..., 0]
     gy = d[..., 1]
-    
     ggx = dd[..., 0]
     ggy = dd[..., 1]
     
-    return _curvature_fun(gx, gy, ggx, ggy)
+    curvature_r =  _curvature_fun(gx, gy, ggx, ggy)
+    if is_nan_border:
+        #I cannot really trust in the border gradient
+        w_s = 4*points_window
+        n_axis_ini = max(0, axis)
+        right_slice = [slice(None, None, None)]*n_axis_ini + [slice(None, w_s, None)]
+        left_slice = [slice(None, None, None)]*n_axis_ini + [slice(-w_s, None, None)]
+        curvature_r[right_slice] = np.nan
+        curvature_r[left_slice] = np.nan
     
+    return curvature_r
+#%%  
 
-def get_curvature_features(skeletons, method = 'grad', points_window=None, lengths=None):
+def get_curvature_features(skeletons, method = 'grad', points_window=None):
     curvature_funcs = {
             'angle' : _h_curvature_angles, 
             'spline' : _h_curvature_spline, 
@@ -191,7 +228,7 @@ def get_curvature_features(skeletons, method = 'grad', points_window=None, lengt
             'tail' : 45/48,
         }
     
-    curvatures = curvature_funcs[method](skeletons, points_window, lengths)
+    curvatures = curvature_funcs[method](skeletons, points_window)
     max_angle_index = curvatures.shape[-1]-1
     segments_ind = {k:int(round(x*max_angle_index)) for k,x in segments_ind_dflt.items()}
     
@@ -199,5 +236,26 @@ def get_curvature_features(skeletons, method = 'grad', points_window=None, lengt
     data = pd.DataFrame.from_dict(curv_dict)
     
     return data
+
+#%%
+
+if __name__ == '__main__':
+    import matplotlib.pylab as plt
     
+    R = 1
+    
+    ang = np.linspace(-np.pi, np.pi, 50)
+    curve = np.array([np.cos(ang), np.sin(ang)]).T*R
+    curvature = _h_curvature_grad(curve, axis=0)
+    
+    plt.figure()
+    plt.subplot(1,2,1)
+    plt.plot(curve[:, 0], curve[:, 1], '.-')
+    plt.axis('equal')
+    
+    plt.subplot(1,2,2)
+    plt.plot(curvature)
+    
+    k = 1/R
+    plt.ylim(k - k/2, k + k/2)
     
