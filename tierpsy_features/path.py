@@ -12,8 +12,7 @@ from scipy.interpolate import interp1d
 
 from tierpsy_features.curvatures import _h_curvature_grad
 from tierpsy_features.postures import get_length
-from tierpsy_features.helper import DataPartition
-
+from tierpsy_features.helper import DataPartition, get_n_worms_estimate
 
 path_curvature_columns = ['path_curvature_body', 
                           'path_curvature_tail', 
@@ -222,9 +221,63 @@ def _test_plot_cnts_maps(ventral_contour, dorsal_contour):
     plt.imshow(np.clip(all_cnts['head']-all_cnts['body'], 0, 10000), interpolation='none')
 
 #%%
+def get_path_grid_stats(path_coords_df, bin_size_microns):
+    bin_vals = ((path_coords_df - path_coords_df.mean())/bin_size_microns).round()
+    bin_vals = bin_vals.fillna(method='ffill').astype(np.int)
+    
+    n_worms_estimate = get_n_worms_estimate(timeseries_features['timestamp'])
+    
+    grid_stats = [('n_worms_estimate', n_worms_estimate)]
+    for b_part in set(x.rpartition('_')[-1] for x in bin_vals.columns):
+        dat = bin_vals[['coord_x_' + b_part,'coord_y_' + b_part]]
+        dat.columns = ['X', 'Y']
+        gg = dat.groupby(["X", "Y"])
+        
+        #here i am counting the number of times any worm enter to a given grid
+        cc = gg.size().reset_index(name="Counts")
+        #cc = pd.crosstab(dat['X'], dat['Y'])
+        
+        #now i want to assign a label to each grid each (worm_index, timestamp)
+        ind_bins = np.full(dat.shape[0], -1)
+        for ii, (k, vals) in enumerate(gg):
+            ind_bins[vals.index] = ii
+        df = timeseries_features[['worm_index']].copy()
+        df['ind_bins'] = ind_bins
+        
+        #now i want to see the duration a given worm spend in each grid
+        grid_durations = []
+        for w, vec in df.groupby('worm_index'):
+            xx = vec['ind_bins'].values
+            xr = np.insert(xx[1:], xx.size-1, -1)
+            
+            b_flags = xr!=xx
+            #b_id = xx[b_flags]
+            b_s = np.diff(np.insert(np.where(b_flags)[0], 0, -1))
+            grid_durations.append(b_s)
+        grid_durations = np.concatenate(grid_durations)
+        
+        Q = [50, 95]
+        time_in_grid = np.percentile(grid_durations, Q)/fps
+        total_time_per_grid = np.percentile(cc['Counts'], Q)/fps/n_worms_estimate
+        total_area_explored = cc['Counts'].size*(bin_size_microns**2)/1e6
+        
+        grid_stats += [
+                (total_area_explored, 'area_explored_' + b_part),
+                (time_in_grid[0], 'time_in_grid_{}_{}th'.format(b_part, Q[0])),
+                (time_in_grid[1], 'time_in_grid_{}_{}th'.format(b_part, Q[1])),
+                (total_time_per_grid[0], 'total_time_per_grid_{}_{}th'.format(b_part, Q[0])),
+                (total_time_per_grid[1], 'total_time_per_grid_{}_{}th'.format(b_part, Q[1])),
+                ]
+        
+       
+    grid_stats_s = pd.Series(*list(zip(*grid_stats)))
+    return grid_stats_s
+
+#%%
 if __name__ == '__main__':
     import os
     import tables
+    
     
     #%%
     #_test_plot_cnts_maps(ventral_contour, dorsal_contour)
@@ -242,11 +295,11 @@ if __name__ == '__main__':
         aux_features = fid['/aux_features']
         
         fps = fid.get_storer('/trajectories_data').attrs['fps']
-        
-    if False:
         good = trajectories_data['skeleton_id']>=0
         trajectories_data = trajectories_data[good]
         blob_features = blob_features[good]
+        
+    if False:
         
         trajectories_data_g = trajectories_data.groupby('worm_index_joined')
         
@@ -262,46 +315,42 @@ if __name__ == '__main__':
             path_curvatures_df, path_coords_df = get_path_curvatures(skeletons, _is_debug=True)
             break
     #%%
-    import matplotlib.pylab as plt
     
     cols = [x for x in aux_features if 'coord_' in x]
     path_coords_df = aux_features[cols]
-    
     bin_size_b_length = 0.25
-    
     body_length = timeseries_features['length'].median()
     bin_size_microns = bin_size_b_length*body_length
-    
-    bin_vals = ((path_coords_df - path_coords_df.mean())/bin_size_microns).round()
-    bin_vals = bin_vals.fillna(method='ffill').astype(np.int)
+    grid_stats_s = get_path_grid_stats(path_coords_df, bin_size_microns)
     
     #%%
-    bin_counts = {}
-    for b_part in set(x.rpartition('_')[-1] for x in bin_vals.columns):
-        dat = bin_vals[['coord_x_' + b_part,'coord_y_' + b_part]]
-        dat.columns = ['X', 'Y']
-        
-        gg = dat.groupby(["X", "Y"])
-        cc = gg.size().reset_index(name="Counts")
-        bin_counts[b_part] = cc
-        #cc = pd.crosstab(dat['X'], dat['Y'])
-        #[gg.groups.keys()]
-    #%%  
-        
-    for k, val in map_counts.items():
-        plt.figure()
-        plt.imshow(val.values, interpolation='none')
-        plt.title(k)
+    import matplotlib.pylab as plt
+    dd = timeseries_features['major_axis']-timeseries_features['head_tail_distance']
+    timeseries_features_g = timeseries_features.groupby('worm_index')
+    #%%
+    
+    worm_index = 321
+    #worm_index = 37      
+    #worm_index = 377      
+    worm_data = timeseries_features_g.get_group(worm_index)
+    body_length = worm_data['length'].median()
+    
+    xx = worm_data['timestamp']
+    #%%
+    #321
+    #for col in worm_data:
+    plt.figure()
+    plt.subplot(5,1,1)
+    plt.plot(xx, dd[worm_data.index]/body_length)
+    plt.subplot(5,1,2)
+    plt.plot(xx, worm_data['head_tail_distance']/body_length)#dd[worm_data.index])
+    plt.subplot(5,1,3)
+    plt.plot(xx, worm_data['angular_velocity'].abs())
+    for ii, col in enumerate(['length', 'speed']):
+        plt.subplot(5,1,4+ii)
+        plt.plot(xx, worm_data[col])
+        plt.title(col)
     #%%
     plt.figure()
-    dd = map_counts['head']-map_counts['body']
-    dd[np.isnan(dd) | (dd<0)] = 0
-    plt.imshow(dd, interpolation='none')
+    plt.plot(xx, worm_data['path_curvature_head'])
     
-#%% 
-    b_counts = cc.values[cc>0]/fps
-    t_med = np.median(b_counts)
-    t_max = np.max(b_counts)
-    b_area = b_counts.size*(bin_size_microns**2) #tot area
-    #%%
-    dd = set([tuple(x) for x in dat[['X', 'Y']].values])

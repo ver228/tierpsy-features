@@ -9,6 +9,7 @@ Created on Mon Oct  2 14:24:25 2017
 import pandas as pd
 import numpy as np
 
+from tierpsy_features.helper import get_n_worms_estimate
 from tierpsy_features.events import get_events
 from tierpsy_features.features import timeseries_columns, ventral_signed_columns
 
@@ -49,19 +50,6 @@ def _normalize_by_w_length(features_timeseries):
     features_timeseries = features_timeseries.rename(columns = changed_feats)
     
     return features_timeseries, changed_feats
-
-def get_n_worms_estimate(frame_numbers, percentile = 99):
-    '''
-    Get an estimate of the number of worms using the table frame_numbers vector
-    '''
-    
-    n_per_frame = frame_numbers.value_counts()
-    n_per_frame = n_per_frame.values
-    if len(n_per_frame) > 0:
-        n_worms_estimate = np.percentile(n_per_frame, percentile)
-    else:
-        n_worms_estimate = 0
-    return n_worms_estimate
 
 
 def get_df_quantiles(df, 

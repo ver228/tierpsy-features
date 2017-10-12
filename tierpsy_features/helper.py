@@ -44,6 +44,19 @@ def nanunwrap(x):
     x[bad] = np.nan
     return x
 
+def get_n_worms_estimate(frame_numbers, percentile = 99):
+    '''
+    Get an estimate of the number of worms using the table frame_numbers vector
+    '''
+    
+    n_per_frame = frame_numbers.value_counts()
+    n_per_frame = n_per_frame.values
+    if len(n_per_frame) > 0:
+        n_worms_estimate = np.percentile(n_per_frame, percentile)
+    else:
+        n_worms_estimate = 0
+    return n_worms_estimate
+
 class DataPartition():
     def __init__(self, partitions=None, n_segments=49):
         partitions_dflt = {'head': (0, 8),
