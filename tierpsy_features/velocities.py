@@ -6,6 +6,7 @@ This module defines the NormalizedWorm class
 import numpy as np
 import pandas as pd
 from collections import OrderedDict
+from scipy.interpolate import interp1d
 
 import matplotlib.pylab as plt
 from matplotlib import animation, patches
@@ -61,7 +62,7 @@ def _h_segment_position(skeletons, partition):
     return coords, orientation_v
 
 #%%
-def get_velocity(skeletons, partition, delta_frames, fps, _is_plot = False):
+def get_velocity(skeletons, partition, delta_frames, fps):
     coords, orientation_v = _h_segment_position(skeletons, partition = partition)
     
     if np.any(np.isnan(coords[:, 0])):

@@ -19,10 +19,12 @@ from tierpsy_features import EIGEN_PROJECTION_FILE
 
 morphology_columns = ['length', 'area', 'area_length_ratio', 'width_length_ratio',
        'width_head_base', 'width_midbody', 'width_tail_base']
-posture_columns = ['head_tail_distance', 'quirkiness', 'major_axis',
+posture_columns = ['quirkiness', 'major_axis',
        'minor_axis', 'eigen_projection_1', 'eigen_projection_2',
        'eigen_projection_3', 'eigen_projection_4', 'eigen_projection_5',
        'eigen_projection_6', 'eigen_projection_7']
+
+posture_aux = ['head_tail_distance']
 
 #%% Morphology Features
 def get_widths(widths):

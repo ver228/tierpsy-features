@@ -54,18 +54,21 @@ def _flag_regions(vec, central_th, extrema_th, smooth_window, min_frame_range):
             frames labeled with a given extrema, label the whole region 
             with the corresponding extrema.
     '''
+    
+    #1)
     vv = pd.Series(vec).fillna(method='ffill').fillna(method='bfill')
     smoothed_vec = vv.rolling(window=smooth_window,center=True).mean()
     
     
-    
+    #2)
     paused_f = (smoothed_vec > -central_th) & (smoothed_vec < central_th)
     turn_on, turn_off = _get_pulses_indexes(paused_f, min_frame_range)
     inter_pulses = zip([0] + list(turn_off), list(turn_on) + [paused_f.size-1])
     
-    
+    #3)
     flag_modes = _range_vec(smoothed_vec, extrema_th)
     
+    #4)
     for ini, fin in inter_pulses:
         dd = np.unique(flag_modes[ini:fin+1])
         dd = [x for x in dd if x != 0]

@@ -38,13 +38,12 @@ def _h_path_curvature(skeletons,
                       partition_str = 'body', 
                       path_step = DFLT_ARGS['path_step'], 
                       path_grad_window = DFLT_ARGS['path_grad_window'],
-                      clip_val_body_lengths = DFLT_ARGS['clip_val_body_lengths'],
                       _is_debug = False):
     
     if body_length is None:
         #caculate the length if it is not given
         body_length = np.nanmedian(get_length(skeletons))
-    clip_val = clip_val_body_lengths/body_length
+    #clip_val = clip_val_body_lengths/body_length
     
     p_obj = DataPartition(n_segments=skeletons.shape[1])
     body_coords = p_obj.apply(skeletons, partition_str, func=np.mean)
@@ -98,7 +97,7 @@ def _h_path_curvature(skeletons,
                                     is_nan_border=False)
     
     #clip values to remove regions with extremely large curvatures (typically short reversars)
-    curvature_r = np.clip(curvature_r, -clip_val,clip_val)
+    #curvature_r = np.clip(curvature_r, -clip_val,clip_val)
     
     ts_i = np.hstack((-1, ts, tt[-1] + 1))
     c_i = np.hstack((curvature_r[0], curvature_r, curvature_r[-1]))
@@ -217,9 +216,7 @@ def _test_plot_cnts_maps(ventral_contour, dorsal_contour):
     
         print(part)
       
-    plt.figure(); 
-    plt.imshow(np.clip(all_cnts['head']-all_cnts['body'], 0, 10000), interpolation='none')
-
+    
 #%%
 def get_path_grid_stats(path_coords_df, bin_size_microns):
     bin_vals = ((path_coords_df - path_coords_df.mean())/bin_size_microns).round()
@@ -323,34 +320,4 @@ if __name__ == '__main__':
     bin_size_microns = bin_size_b_length*body_length
     grid_stats_s = get_path_grid_stats(path_coords_df, bin_size_microns)
     
-    #%%
-    import matplotlib.pylab as plt
-    dd = timeseries_features['major_axis']-timeseries_features['head_tail_distance']
-    timeseries_features_g = timeseries_features.groupby('worm_index')
-    #%%
-    
-    worm_index = 321
-    #worm_index = 37      
-    #worm_index = 377      
-    worm_data = timeseries_features_g.get_group(worm_index)
-    body_length = worm_data['length'].median()
-    
-    xx = worm_data['timestamp']
-    #%%
-    #321
-    #for col in worm_data:
-    plt.figure()
-    plt.subplot(5,1,1)
-    plt.plot(xx, dd[worm_data.index]/body_length)
-    plt.subplot(5,1,2)
-    plt.plot(xx, worm_data['head_tail_distance']/body_length)#dd[worm_data.index])
-    plt.subplot(5,1,3)
-    plt.plot(xx, worm_data['angular_velocity'].abs())
-    for ii, col in enumerate(['length', 'speed']):
-        plt.subplot(5,1,4+ii)
-        plt.plot(xx, worm_data[col])
-        plt.title(col)
-    #%%
-    plt.figure()
-    plt.plot(xx, worm_data['path_curvature_head'])
     

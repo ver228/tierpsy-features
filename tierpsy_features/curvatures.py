@@ -225,7 +225,7 @@ def get_curvature_features(skeletons, method = 'grad', points_window=None):
             'neck' : 15/48,
             'midbody' : 24/48, 
             'hips' : 33/48,
-            'tail' : 45/48,
+            'tail' : 44/48,
         }
     
     curvatures = curvature_funcs[method](skeletons, points_window)

@@ -9,6 +9,11 @@ Created on Wed Sep 20 19:41:10 2017
 import numpy as np
 import pandas as pd
 
+event_columns = ['motion_mode', 'food_region', 'is_turn']
+durations_columns = ['event_type', 'region', 
+                     'duration', 'timestamp_initial',
+                     'timestamp_final', 'edge_flag']
+
 #%%
 def _get_pulses_indexes(light_on, min_window_size=0, is_pad = True):
     '''
@@ -37,6 +42,52 @@ def _get_pulses_indexes(light_on, min_window_size=0, is_pad = True):
     good = delP > min_window_size
     
     return turn_on[good], turn_off[good]
+
+#%%
+def _find_turns(worm_data, 
+                fps, 
+                d_ratio_th = (0.15, 0.075), 
+                ang_v_th = (0.75, 0.35), 
+                interp_window_s = 0.5
+                ):
+    #check the necessary columns are in the dataframe
+    assert set(('head_tail_distance', 'major_axis', 'angular_velocity')).issubset(set(worm_data.columns))
+    
+    #adjust the interpolation window in frames
+    w_interp = int(fps*interp_window_s)
+    w_interp = w_interp if w_interp%2 == 1 else w_interp+1
+    
+    try:
+        #get the ratio of this mesurements
+        #the cubic interpolation is important to detect this feature
+        d_ratio = 1-(worm_data['head_tail_distance']/worm_data['major_axis'])
+        d_ratio = d_ratio.rolling(window = w_interp).min().interpolate(method='cubic')
+    
+        ang_velocity = worm_data['angular_velocity'].abs()
+        ang_velocity = ang_velocity.rolling(window = w_interp).max().interpolate(method='cubic')
+    except ValueError:
+        print(d_ratio.shape)
+        #there was an error in the interpolation
+        return [np.full(worm_data.shape[0], np.nan) for _ in range(3)]
+    
+    
+    #find candidate turns that satisfy at the same time the higher threshold
+    turns_vec_ini = (d_ratio>d_ratio_th[0]) & (ang_velocity>ang_v_th[0])
+    
+    #refine the estimates with the lower threshold in each vector independently
+    d_ration_candidates = _get_pulses_indexes(d_ratio>d_ratio_th[1])
+    d_ration_r = [x for x in zip(*d_ration_candidates) if np.any(turns_vec_ini[x[0]:x[1]+1])]
+    
+    ang_v_candidates = _get_pulses_indexes(ang_velocity>ang_v_th[1])
+    ang_v_r = [x for x in zip(*ang_v_candidates) if np.any(turns_vec_ini[x[0]:x[1]+1])]
+    
+    #combine the results into a final vector
+    turns_vec = np.zeros_like(turns_vec_ini)
+    for x in d_ration_r + ang_v_r:
+        turns_vec[x[0]:x[1]+1] = True
+    
+    return turns_vec, d_ratio, ang_velocity
+
 #%%
 def _range_vec(vec, th):
     '''
@@ -148,7 +199,8 @@ def get_events(df, fps, worm_length = None, _is_debug=False):
     smooth_window = w_size if w_size % 2 == 1 else w_size + 1
     
     #WORM MOTION EVENTS
-    events_df = pd.DataFrame(df[['worm_index', 'timestamp']])
+    dd = [x for x in ['worm_index', 'timestamp'] if x in df]
+    events_df = pd.DataFrame(df[dd])
     if 'speed' in df:
         speed = df['speed'].values
         pause_th_lower = worm_length*0.025
@@ -179,6 +231,12 @@ def get_events(df, fps, worm_length = None, _is_debug=False):
                                      ) 
         events_df['food_region'] = food_region
     
+    #TURN EVENT
+    if set(('head_tail_distance', 'major_axis', 'angular_velocity')).issubset(set(df.columns)):
+        turn_vector, _, _ = _find_turns(df, fps)
+        events_df['is_turn'] = turn_vector.astype(np.float32)
+    
+    
     if _is_debug:
         plt.figure()
         plt.plot(speed)
@@ -193,6 +251,8 @@ def get_events(df, fps, worm_length = None, _is_debug=False):
     event_durations_df = get_event_durations(events_df, fps)
     
     return events_df, event_durations_df       
+
+
 
 
 
@@ -211,38 +271,51 @@ if __name__ == '__main__':
         with pd.HDFStore(fname, 'r') as fid:
             if '/provenance_tracking/FEAT_TIERPSY' in fid:
                 timeseries_features = fid['/timeseries_features']
+                
+                trajectories_data = fid['/trajectories_data']
+                good = trajectories_data['skeleton_id']>=0
+                trajectories_data = trajectories_data[good]
             else:
                 continue
         break
     
     #%%
     fps = read_fps(fname)
-    for w_index in [2]:#, 69, 431, 437, 608]:
-        worm_data = timeseries_features[timeseries_features['worm_index']==w_index]
+    for worm_index in [2]:#, 69, 431, 437, 608]:
+        worm_data = timeseries_features[timeseries_features['worm_index']==worm_index]
         worm_length = worm_data['length'].median()
         
         events_df, event_durations_df = get_events(worm_data, fps, _is_debug=True)
     
-        #%%
-        #angular_velocity = timeseries_features.loc[good, 'angular_velocity'].values
-        angular_velocity = timeseries_features['angular_velocity'].values
-        smooth_window = int(round(fps*2))  
-        
-        dd = angular_velocity.copy()
-        dd[np.isnan(dd)] = 0
-        dd = dd.cumsum()
-        
-        #smoothed_vec = pd.Series(dd).rolling(window=smooth_window,center=True).mean()
-        
-        #%%
-        plt.figure()
-        worm_data['curvature_tail'].plot()
-        worm_data['curvature_midbody'].plot()
-        worm_data['curvature_head'].plot()
+    
     #%%
+    #%%
+    from tierpsy.analysis.ske_create.helperIterROI import  getROIfromInd
+    turns_vec, d_ratio, ang_velocity = _find_turns(worm_data, fps)
+    xx = worm_data['timestamp'].values
+    
+    plt.figure(figsize=(25,5))
+    plt.plot(xx, ang_velocity)
+    plt.plot(xx, d_ratio)
+    plt.plot(xx, turns_vec)
+    #plt.ylim((0.7, 1.1))
+    plt.xlim((xx[0], xx[-1]))
     
     
+    dd = _get_pulses_indexes(turns_vec, min_window_size=fps//2)
+    pulse_ranges = list(zip(*dd))
     
     
-    
+    masked_file = fname.replace('_featuresN', '')
+    for p in pulse_ranges:
+        
+        dd = worm_data.loc[worm_data.index[p[0]:p[1]+1]]
+        timestamps = dd['timestamp'][::12]
+        plt.figure(figsize=(50, 5))
+        for ii, tt in enumerate(timestamps):
+            _, img, _ = getROIfromInd(masked_file, trajectories_data, tt, worm_index)
+            
+            plt.subplot(1, timestamps.size, ii+1)
+            plt.imshow(img, cmap='gray', interpolation='none')
+            plt.axis('off')
     
