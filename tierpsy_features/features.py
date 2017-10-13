@@ -29,24 +29,21 @@ aux_columns =  posture_aux + path_curvature_columns_aux
 timeseries_columns = timeseries_feats_columns + event_columns + aux_columns
 
 ventral_signed_columns = [
-    'relative_speed_midbody',
-    'relative_angular_velocity_head_tip',
-    'relative_angular_velocity_neck',
-    'relative_angular_velocity_hips', 
-    'relative_angular_velocity_tail_tip', 
-    'eigen_projection_1', 
-    'eigen_projection_2', 
-    'eigen_projection_3', 
-    'eigen_projection_4', 
-    'eigen_projection_5', 
-    'eigen_projection_6', 
-    'eigen_projection_7', 
-    'curvature_head', 
-    'curvature_hips', 
-    'curvature_midbody', 
-    'curvature_neck', 
-    'curvature_tail'
-    ]
+        'angular_velocity',
+        'relative_speed_midbody',
+        'relative_angular_velocity_head_tip',
+        'relative_angular_velocity_neck',
+        'relative_angular_velocity_hips', 
+        'relative_angular_velocity_tail_tip', 
+        'eigen_projection_1', 
+        'eigen_projection_2', 
+        'eigen_projection_3', 
+        'eigen_projection_4', 
+        'eigen_projection_5', 
+        'eigen_projection_6', 
+        'eigen_projection_7', 
+        ] + path_curvature_columns + curvature_columns
+
 
 #all the ventral_signed_columns must be in timeseries_columns
 assert len(set(ventral_signed_columns) - set(timeseries_columns))  == 0 
