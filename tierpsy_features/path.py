@@ -29,7 +29,9 @@ path_curvature_columns_aux = ['coord_x_body', 'coord_y_body',
 DFLT_ARGS = dict(
         path_step = 11,
         path_grad_window = 5,
-        clip_val_body_lengths = 20
+        clip_val_body_lengths = 20,
+        bin_size_microns = 250,
+        bin_size_body_lengths = 0.25
         )
 
 #%%
@@ -218,27 +220,30 @@ def _test_plot_cnts_maps(ventral_contour, dorsal_contour):
       
     
 #%%
-def get_path_grid_stats(path_coords_df, bin_size_microns):
+def _get_path_coverage_feats(timeseries_data, bin_size_microns):
+    
+    #find the columns that correspond to curvature_coords
+    cols = [x for x in timeseries_data if x in path_curvature_columns_aux]
+    path_coords_df = timeseries_data[cols]
+    
     bin_vals = ((path_coords_df - path_coords_df.mean())/bin_size_microns).round()
     bin_vals = bin_vals.fillna(method='ffill').astype(np.int)
     
-    n_worms_estimate = get_n_worms_estimate(timeseries_features['timestamp'])
-    
-    grid_stats = [('n_worms_estimate', n_worms_estimate)]
+    path_coverage_feats = {}
     for b_part in set(x.rpartition('_')[-1] for x in bin_vals.columns):
         dat = bin_vals[['coord_x_' + b_part,'coord_y_' + b_part]]
         dat.columns = ['X', 'Y']
         gg = dat.groupby(["X", "Y"])
         
         #here i am counting the number of times any worm enter to a given grid
-        cc = gg.size().reset_index(name="Counts")
+        grid_counts = gg.size().reset_index(name="Counts")
         #cc = pd.crosstab(dat['X'], dat['Y'])
         
         #now i want to assign a label to each grid each (worm_index, timestamp)
         ind_bins = np.full(dat.shape[0], -1)
         for ii, (k, vals) in enumerate(gg):
             ind_bins[vals.index] = ii
-        df = timeseries_features[['worm_index']].copy()
+        df = timeseries_data[['worm_index']].copy()
         df['ind_bins'] = ind_bins
         
         #now i want to see the duration a given worm spend in each grid
@@ -253,20 +258,43 @@ def get_path_grid_stats(path_coords_df, bin_size_microns):
             grid_durations.append(b_s)
         grid_durations = np.concatenate(grid_durations)
         
-        Q = [50, 95]
-        time_in_grid = np.percentile(grid_durations, Q)/fps
-        total_time_per_grid = np.percentile(cc['Counts'], Q)/fps/n_worms_estimate
-        total_area_explored = cc['Counts'].size*(bin_size_microns**2)/1e6
         
+        path_coverage_feats[b_part] = (grid_counts, grid_durations)
+        
+        
+    return path_coverage_feats
+        
+def get_path_extent_stats(timeseries_data, fps, is_normalized = False):
+    
+    if is_normalized:
+        body_length = timeseries_data['length'].median()
+        bin_size_microns = DFLT_ARGS['bin_size_body_lengths']*body_length
+        area_per_grid = 1
+        is_norm_str = '_norm'
+    else:
+        bin_size_microns = DFLT_ARGS['bin_size_microns']
+        is_norm_str = ''
+        area_per_grid = bin_size_microns**2
+    
+    path_coverage_feats = _get_path_coverage_feats(timeseries_data, bin_size_microns)
+    
+    Q = [50, 95]
+    
+    grid_stats = []
+    for b_part, (grid_counts, grid_durations) in path_coverage_feats.items():
+        grid_transit_time = np.percentile(grid_durations, Q)/fps
+        path_density = np.percentile(grid_counts['Counts'], Q)/grid_counts['Counts'].sum()
+        path_coverage = grid_counts['Counts'].size*area_per_grid
+        
+        posfix = b_part + is_norm_str
         grid_stats += [
-                (total_area_explored, 'area_explored_' + b_part),
-                (time_in_grid[0], 'time_in_grid_{}_{}th'.format(b_part, Q[0])),
-                (time_in_grid[1], 'time_in_grid_{}_{}th'.format(b_part, Q[1])),
-                (total_time_per_grid[0], 'total_time_per_grid_{}_{}th'.format(b_part, Q[0])),
-                (total_time_per_grid[1], 'total_time_per_grid_{}_{}th'.format(b_part, Q[1])),
+                (path_coverage, 'path_coverage_' + posfix),
+                (path_density[0], 'path_density_{}_{}th'.format(posfix, Q[0])),
+                (path_density[1], 'path_density_{}_{}th'.format(posfix, Q[1])),
+                (grid_transit_time[0], 'path_transit_time_{}_{}th'.format(posfix, Q[0])),
+                (grid_transit_time[1], 'path_transit_time_{}_{}th'.format(posfix, Q[1])),
                 ]
-        
-       
+    
     grid_stats_s = pd.Series(*list(zip(*grid_stats)))
     return grid_stats_s
 
@@ -288,8 +316,7 @@ if __name__ == '__main__':
     with pd.HDFStore(features_file, 'r') as fid:
         blob_features = fid['/blob_features']
         trajectories_data = fid['/trajectories_data']
-        timeseries_features = fid['/timeseries_features']
-        aux_features = fid['/aux_features']
+        timeseries_data = fid['/timeseries_data']
         
         fps = fid.get_storer('/trajectories_data').attrs['fps']
         good = trajectories_data['skeleton_id']>=0
@@ -307,17 +334,11 @@ if __name__ == '__main__':
             skel_id = worm_data['skeleton_id'].values 
             with tables.File(features_file, 'r') as fid:
                 skeletons = fid.get_node('/coordinates/skeletons')[skel_id, :, :]
-            worm_features = timeseries_features.loc[skel_id]
+            worm_features = timeseries_data.loc[skel_id]
             
             path_curvatures_df, path_coords_df = get_path_curvatures(skeletons, _is_debug=True)
             break
     #%%
-    
-    cols = [x for x in aux_features if 'coord_' in x]
-    path_coords_df = aux_features[cols]
-    bin_size_b_length = 0.25
-    body_length = timeseries_features['length'].median()
-    bin_size_microns = bin_size_b_length*body_length
-    grid_stats_s = get_path_grid_stats(path_coords_df, bin_size_microns)
+    get_path_extent_stats(timeseries_data)
     
     

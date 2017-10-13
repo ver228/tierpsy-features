@@ -13,6 +13,13 @@ event_columns = ['motion_mode', 'food_region', 'is_turn']
 durations_columns = ['event_type', 'region', 
                      'duration', 'timestamp_initial',
                      'timestamp_final', 'edge_flag']
+event_region_labels = {
+            'motion_mode': {-1:'backward', 1:'forward', 0:'paused'}, 
+            'food_region': {-1:'outside', 1:'inside', 0:'edge'},
+            'is_turn': {1:'inter', 0:'intra'}
+            }
+
+assert set(event_region_labels.keys()).issubset(event_columns) 
 
 #%%
 def _get_pulses_indexes(light_on, min_window_size=0, is_pad = True):
@@ -159,7 +166,7 @@ def _get_vec_durations(event_vec):
     event_durations_df = pd.DataFrame(np.concatenate(durations_list), columns = cols)
     return event_durations_df
 
-def get_event_durations(events_df, fps):
+def get_event_durations_w(events_df, fps):
     event_durations_list = []
     for col in events_df:
         if not col in ['timestamp', 'worm_index']:
@@ -248,13 +255,70 @@ def get_events(df, fps, worm_length = None, _is_debug=False):
         
     
     #get event durations
-    event_durations_df = get_event_durations(events_df, fps)
+    event_durations_df = get_event_durations_w(events_df, fps)
     
     return events_df, event_durations_df       
 
+#%%
+def _get_event_stats(event_durations, n_worms_estimate, total_time):
+    '''
+    Get the event statistics using the event durations table.
+    '''
+    
+    all_events_time = event_durations.groupby('event_type').agg({'duration':'sum'})['duration']
+    event_g = event_durations.groupby(('event_type', 'region'))
+    event_stats = []
+    
+    valid_regions = [x for x in event_region_labels.keys() if x in all_events_time]
+    
+    for event_type in valid_regions:
+        region_dict = event_region_labels[event_type]
+        for region_id, region_name in region_dict.items():
+            stat_prefix = event_type + '_' + region_name
+            try:
+                dat = event_g.get_group((event_type, region_id))
+                duration = dat['duration'].values
+                edge_flag = dat['edge_flag'].values
+            except:
+                duration = np.zeros(1)
+                edge_flag = np.zeros(0)
+    
+            stat_name = stat_prefix + '_duration_50th'
+            stat_val = np.nanmedian(duration)
+            event_stats.append((stat_val, stat_name))
+            
+            stat_name = stat_prefix + '_fraction'
+            stat_val = np.nansum(duration)/all_events_time[event_type]
+            event_stats.append((stat_val, stat_name))
+            
+            stat_name = stat_prefix + '_frequency'
+            # calculate total events excluding events that started before the beginig of the trajectory
+            total_events = (edge_flag != -1).sum()
+            stat_val = total_events/n_worms_estimate/total_time
+            event_stats.append((stat_val, stat_name))
+            
+    event_stats_s = pd.Series(*list(zip(*event_stats)))
+    return event_stats_s
 
 
 
+def get_event_stats(timeseries_data, fps, n_worms_estimate):
+    #%%
+    total_time = (timeseries_data['timestamp'].max() - timeseries_data['timestamp'].min())/fps    
+    dd = ['worm_index', 'timestamp'] + event_columns
+    events_df = timeseries_data[dd]
+    
+    event_durations = []
+    for worm_index, dat in events_df.groupby('worm_index'):
+        dur = get_event_durations_w(dat, fps)
+        dur['worm_index'] = worm_index
+        event_durations.append(dur)
+        
+    event_durations = pd.concat(event_durations, ignore_index=True)
+    event_stats_s = _get_event_stats(event_durations, n_worms_estimate, total_time)
+    #%%
+    return event_stats_s
+#%%
 
 if __name__ == '__main__':
     from tierpsy.helper.params import read_fps
@@ -270,7 +334,7 @@ if __name__ == '__main__':
         print(ifname+1, len(fnames))
         with pd.HDFStore(fname, 'r') as fid:
             if '/provenance_tracking/FEAT_TIERPSY' in fid:
-                timeseries_features = fid['/timeseries_features']
+                timeseries_data = fid['/timeseries_features']
                 
                 trajectories_data = fid['/trajectories_data']
                 good = trajectories_data['skeleton_id']>=0
@@ -282,13 +346,15 @@ if __name__ == '__main__':
     #%%
     fps = read_fps(fname)
     for worm_index in [2]:#, 69, 431, 437, 608]:
-        worm_data = timeseries_features[timeseries_features['worm_index']==worm_index]
+        worm_data = timeseries_data[timeseries_data['worm_index']==worm_index]
         worm_length = worm_data['length'].median()
         
         events_df, event_durations_df = get_events(worm_data, fps, _is_debug=True)
-    
-    
     #%%
+    from tierpsy_features.helper import get_n_worms_estimate
+    
+    n_worms_estimate = get_n_worms_estimate(timeseries_data['timestamp'])
+    get_event_stats(events_df, fps, n_worms_estimate)
     #%%
     from tierpsy.analysis.ske_create.helperIterROI import  getROIfromInd
     turns_vec, d_ratio, ang_velocity = _find_turns(worm_data, fps)

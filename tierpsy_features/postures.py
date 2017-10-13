@@ -17,7 +17,7 @@ from tierpsy_features import EIGEN_PROJECTION_FILE
 
 #%%
 
-morphology_columns = ['length', 'area', 'area_length_ratio', 'width_length_ratio',
+morphology_columns = ['length', 'area', #'area_length_ratio', 'width_length_ratio',
        'width_head_base', 'width_midbody', 'width_tail_base']
 posture_columns = ['quirkiness', 'major_axis',
        'minor_axis', 'eigen_projection_1', 'eigen_projection_2',
@@ -83,14 +83,11 @@ def get_morphology_features(skeletons,
     if ventral_contours is not None and dorsal_contours is not None:
         areas = get_area(ventral_contours, dorsal_contours)
         data['area'] = areas
-        data['area_length_ratio'] = areas/lengths
+        #data['area_length_ratio'] = areas/lengths
     
     if widths is not None:
         widths_seg = get_widths(widths)
-        
-        if areas is not None:
-            data['width_length_ratio'] = areas/widths_seg['midbody']
-        
+        #data['width_length_ratio'] = widths_seg['midbody']/lengths
         for p in widths_seg:
             data['width_' + p] = widths_seg[p]
        
