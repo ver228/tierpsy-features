@@ -295,12 +295,11 @@ def _get_event_stats(event_durations, n_worms_estimate, total_time):
     event_stats_s = pd.Series(*list(zip(*event_stats)))
     return event_stats_s
 
-
-
-def get_event_stats(timeseries_data, fps, n_worms_estimate):
-    #%%
-    total_time = (timeseries_data['timestamp'].max() - timeseries_data['timestamp'].min())/fps    
+#%%
+def get_event_durations(timeseries_data, fps):
+    
     dd = ['worm_index', 'timestamp'] + event_columns
+    dd = [x for x in dd if x in timeseries_data]
     events_df = timeseries_data[dd]
     
     event_durations = []
@@ -310,8 +309,15 @@ def get_event_stats(timeseries_data, fps, n_worms_estimate):
         event_durations.append(dur)
         
     event_durations = pd.concat(event_durations, ignore_index=True)
+
+    return event_durations
+
+
+def get_event_stats(timeseries_data, fps, n_worms_estimate):
+    event_durations = get_event_durations(timeseries_data, fps)
+    
+    total_time = (timeseries_data['timestamp'].max() - timeseries_data['timestamp'].min())/fps    
     event_stats_s = _get_event_stats(event_durations, n_worms_estimate, total_time)
-    #%%
     return event_stats_s
 #%%
 
