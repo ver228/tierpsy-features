@@ -227,7 +227,10 @@ class SmoothedWorm():
             return dat_o
         
         dat_all = dat_o[good_frames_index]
-        
+        if dat_all.shape[0] <= 2:
+            #not enough data to smooth
+            return dat_all
+            
         new_shape = (frames_to_interpolate.size, dat_o.shape[1], dat_o.shape[2]) 
         dat_all_s = np.full(new_shape, np.nan)
         
