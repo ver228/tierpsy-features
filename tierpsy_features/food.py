@@ -93,8 +93,10 @@ def get_cnt_feats(skeletons,
     food_u = (np.dot(R, food_u.T)).T
         
     dot_prod = np.sum(food_u*worm_u, axis=1) 
-    orientation_food_cnt = 90-np.arccos(dot_prod)*180/np.pi
     
+    with np.errstate(invalid='ignore'):
+        orientation_food_cnt = 90-np.arccos(dot_prod)*180/np.pi
+        
     #%%
     dd = np.array([orientation_food_cnt, dist_from_cnt]).T
     food_df = pd.DataFrame(dd, columns = food_columns)

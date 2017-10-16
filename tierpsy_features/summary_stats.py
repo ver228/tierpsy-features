@@ -16,22 +16,39 @@ from tierpsy_features import timeseries_feats_columns, \
 ventral_signed_columns, path_curvature_columns, curvature_columns
 
 
-feats2normalize = [
-           'speed',
-           'relative_speed_midbody', 
-           'relative_radial_velocity_head_tip',
-           'relative_radial_velocity_neck',
-           'relative_radial_velocity_hips',
-           'relative_radial_velocity_tail_tip',
-           'head_tail_distance',
-           'major_axis', 
-           'minor_axis', 
-           'dist_from_food_edge',
-           'length',
-           'width_head_base', 
-           'width_midbody', 
-           'width_tail_base'
-           ]
+feats2normalize = {
+    'L' : [
+       'speed',
+       'relative_speed_midbody', 
+       'relative_radial_velocity_head_tip',
+       'relative_radial_velocity_neck',
+       'relative_radial_velocity_hips',
+       'relative_radial_velocity_tail_tip',
+       'head_tail_distance',
+       'major_axis', 
+       'minor_axis', 
+       'dist_from_food_edge',
+       'length',
+       'width_head_base', 
+       'width_midbody', 
+       'width_tail_base'
+       ],
+    '1/L' : path_curvature_columns + curvature_columns,
+    'L^2' : ['area']
+}
+
+def _h_get_conversion_vec(units_t, median_length_vec):
+    if units_t == 'L':
+        conversion_vec = 1/median_length_vec
+    elif units_t == '1/L':
+        conversion_vec = median_length_vec
+    elif units_t == 'L^2':
+        conversion_vec = median_length_vec**2
+    return conversion_vec
+    
+def _h_filter_ventral_features(feats2check):
+    valid_f = [x for x in feats2check if any(x.startswith(f) for f in ventral_signed_columns)]
+    return valid_f
 
 def _normalize_by_w_length(timeseries_data, feats2norm):
     '''
@@ -42,30 +59,18 @@ def _normalize_by_w_length(timeseries_data, feats2norm):
     median_length = timeseries_data.groupby('worm_index').agg({'length':'median'})
     median_length_vec = timeseries_data['worm_index'].map(median_length['length'])
     
-    
-    
-    feats2norm = [x for x in timeseries_data if any(x.startswith(f) for f in feats2norm)]
-    
-    feats2norm #this features units have [microns]
-    for f in feats2norm:
-        timeseries_data[f] /= median_length_vec
-    
-    for f in ['area']: #this units have [microns^2]
-        timeseries_data[f] /= median_length_vec**2
-    
-    curv_feats = path_curvature_columns + curvature_columns #curvature units are [1/microns]
-    for f in curv_feats:
-        timeseries_data[f] *= median_length_vec
-    
-    dd = feats2norm + curv_feats + ['area']
-    changed_feats = {x: x + '_norm' for x in dd}    
+    changed_feats_l = []
+    for units_t, feats in feats2normalize.items():
+        feats_f = [x for x in timeseries_data if any(x.startswith(f) for f in feats)]
+        conversion_vec = _h_get_conversion_vec(units_t, median_length_vec)
+        for f in feats_f:
+            timeseries_data[f] *= conversion_vec
+        changed_feats_l += feats_f
+
+    changed_feats = {x: x + '_norm' for x in changed_feats_l}    
     timeseries_data = timeseries_data.rename(columns = changed_feats)
     
     return timeseries_data, changed_feats
-
-def _filter_ventral_features(feats2check):
-    return [x for x in feats2check if any(x.startswith(f) for f in ventral_signed_columns)]
-
 
 def get_df_quantiles(df,
                      feats2check = timeseries_feats_columns,
@@ -113,7 +118,7 @@ def get_df_quantiles(df,
     feat_mean = None
     if is_abs_ventral:
         #find features that match ventral_signed_columns
-        feats2abs = _filter_ventral_features(feats2check)
+        feats2abs = _h_filter_ventral_features(feats2check)
         if feats2abs:
             Q = df[feats2abs].abs().quantile(valid_q)
             Q.columns = [x+'_abs' for x in Q.columns]
@@ -310,13 +315,49 @@ def _old_events_from_df(features_timeseries, fps):
     event_durations = pd.concat(event_durations, ignore_index=True)
     return event_df, event_durations
 
+def get_feat_stats_all(timeseries_data, blob_features, fps):
+    
+    feat_stats = get_feat_stats(timeseries_data, fps, is_normalize = False)
+    
+    
+    #this is a dirty solution to avoid duplicates but we are testing right now
+    feat_stats_n = get_feat_stats(timeseries_data, fps, is_normalize = True)
+    feat_stats_n = feat_stats_n[[x for x in feat_stats_n.index if x not in feat_stats.index]]
+    
+    feat_stats_v = get_df_quantiles(timeseries_data, 
+                     feats2check = ventral_signed_columns, 
+                     is_abs_ventral = False, 
+                     is_normalize = False)
+    
+    
+    feat_stats_v_n = get_df_quantiles(timeseries_data, 
+                     feats2check = ventral_signed_columns, 
+                     is_abs_ventral = False, 
+                     is_normalize = True)
+    feat_stats_v_n = feat_stats_v_n[[x for x in feat_stats_v_n.index if x not in feat_stats_v.index]]
+    
+    blob_feats = [
+           'area', 'perimeter', 'box_length', 'box_width',
+           'quirkiness', 'compactness', 'solidity',
+           'hu0', 'hu1', 'hu2', 'hu3', 'hu4',
+           'hu5', 'hu6'
+           ]
+    blob_stats = get_df_quantiles(blob_features, feats2check = blob_feats)
+    blob_stats.index = ['blob_' + x for x in blob_stats.index]
+    
+    exp_feats = pd.concat((feat_stats, feat_stats_n, blob_stats, feat_stats_v, feat_stats_v_n))
+    
+    return exp_feats
+
 if __name__ == '__main__':
     import glob
     import sys
     import os
+    
+    from tierpsy.helper.params import read_ventral_side
+    
     sys.path.append('/Users/ajaver/Documents/GitHub/process-rig-data/process_files')
     from misc import get_rig_experiments_df
-    #exp_set_dir = '/Volumes/behavgenom_archive$/Avelino/screening/Swiss_Strains'
     exp_set_dir = '/Users/ajaver/OneDrive - Imperial College London/swiss_strains'
     csv_dir = os.path.join(exp_set_dir, 'ExtraFiles')
     feats_dir = os.path.join(exp_set_dir, 'Results')
@@ -343,61 +384,24 @@ if __name__ == '__main__':
     
     assert info_df.shape[0] == len(fnames)
     
-    
-    from tierpsy.helper.params import read_ventral_side
-    
     all_data = []
+    
+    
     for fname, (ii, row) in zip(fnames, info_df.iterrows()):
         print(ii+1, len(info_df))
         
         ventral_side = read_ventral_side(fname)
-        
-        with pd.HDFStore(fname, 'r') as fid:
-            fps = fid.get_storer('/trajectories_data').attrs['fps']
-            timeseries_data = fid['/timeseries_data']
-            blob_features = fid['/blob_features']
-        
-        
-        
-        timeseries_data['ventral_orientation'] = 0
-        
-        feat_stats = get_feat_stats(timeseries_data, fps, is_normalize = False)
-        
-        #this is a dirty solution to avoid duplicates but we are testing right now
-        feat_stats_n = get_feat_stats(timeseries_data, fps, is_normalize = True)
-        feat_stats_n = feat_stats_n[[x for x in feat_stats_n.index if x not in feat_stats.index]]
-        
-        # another dirty solution to add features with ventral sign
-        ventral_feats = _filter_ventral_features(timeseries_feats_columns)
-        if ventral_side == 'clockwise':
-            timeseries_data[ventral_feats] *= -1
-        
-        feat_stats_v = get_df_quantiles(timeseries_data, 
-                         feats2check = ventral_feats, 
-                         is_abs_ventral = False, 
-                         is_normalize = False)
-        
-        
-        feat_stats_v_n = get_df_quantiles(timeseries_data, 
-                         feats2check = ventral_feats, 
-                         is_abs_ventral = False, 
-                         is_normalize = True)
-        feat_stats_v_n = feat_stats_v_n[[x for x in feat_stats_v_n.index if x not in feat_stats_v.index]]
-        
-        blob_feats = [
-               'area', 'perimeter', 'box_length', 'box_width',
-               'quirkiness', 'compactness', 'solidity',
-               'hu0', 'hu1', 'hu2', 'hu3', 'hu4',
-               'hu5', 'hu6'
-               ]
-        blob_stats = get_df_quantiles(blob_features, feats2check = blob_feats)
-        blob_stats.index = ['blob_' + x for x in blob_stats.index]
-        
-        exp_feats = pd.concat((feat_stats, feat_stats_n, blob_stats, feat_stats_v, feat_stats_v_n))
-        
-        info_zip = zip(*[row.tolist()]*len(exp_feats))
-        all_data += list(zip(*info_zip, exp_feats, exp_feats.index))
-        
-        print(len(all_data))
-        
-        break
+#        
+#        with pd.HDFStore(fname, 'r') as fid:
+#            fps = fid.get_storer('/trajectories_data').attrs['fps']
+#            timeseries_data = fid['/timeseries_data']
+#            blob_features = fid['/blob_features']
+#        
+#        exp_feats = get_feat_stats_all(timeseries_data, blob_features, fps)
+#        
+#        info_zip = zip(*[row.tolist()]*len(exp_feats))
+#        all_data += list(zip(*info_zip, exp_feats, exp_feats.index))
+#        
+#        print(len(all_data))
+#        
+#        break

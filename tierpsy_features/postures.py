@@ -57,7 +57,9 @@ def _h_signed_areas(cnt_side1, cnt_side2):
     return signed_area
 
 def get_area(cnt_side1, cnt_side2):
-    return np.abs(_h_signed_areas(cnt_side1, cnt_side2))
+    with np.errstate(invalid='ignore'):
+        area = np.abs(_h_signed_areas(cnt_side1, cnt_side2))
+    return area
 
 def get_length(skeletons):
     '''
@@ -159,8 +161,6 @@ def get_posture_features(skeletons):
     
     data = pd.DataFrame.from_dict(data)
     return data
-
-
 
 #%%
 if __name__ == '__main__':

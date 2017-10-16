@@ -9,14 +9,14 @@ Created on Wed Sep 20 19:41:10 2017
 import numpy as np
 import pandas as pd
 
-event_columns = ['motion_mode', 'food_region', 'is_turn']
+event_columns = ['motion_mode', 'food_region', 'turn']
 durations_columns = ['event_type', 'region', 
                      'duration', 'timestamp_initial',
                      'timestamp_final', 'edge_flag']
 event_region_labels = {
             'motion_mode': {-1:'backward', 1:'forward', 0:'paused'}, 
             'food_region': {-1:'outside', 1:'inside', 0:'edge'},
-            'is_turn': {1:'inter', 0:'intra'}
+            'turn': {1:'inter', 0:'intra'}
             }
 
 assert set(event_region_labels.keys()).issubset(event_columns) 
@@ -69,11 +69,10 @@ def _find_turns(worm_data,
         #the cubic interpolation is important to detect this feature
         d_ratio = 1-(worm_data['head_tail_distance']/worm_data['major_axis'])
         d_ratio = d_ratio.rolling(window = w_interp).min().interpolate(method='cubic')
-    
-        ang_velocity = worm_data['angular_velocity'].abs()
+        with np.errstate(invalid='ignore'):
+            ang_velocity = worm_data['angular_velocity'].abs()
         ang_velocity = ang_velocity.rolling(window = w_interp).max().interpolate(method='cubic')
     except ValueError:
-        print(d_ratio.shape)
         #there was an error in the interpolation
         return [np.full(worm_data.shape[0], np.nan) for _ in range(3)]
     
@@ -241,7 +240,7 @@ def get_events(df, fps, worm_length = None, _is_debug=False):
     #TURN EVENT
     if set(('head_tail_distance', 'major_axis', 'angular_velocity')).issubset(set(df.columns)):
         turn_vector, _, _ = _find_turns(df, fps)
-        events_df['is_turn'] = turn_vector.astype(np.float32)
+        events_df['turn'] = turn_vector.astype(np.float32)
     
     
     if _is_debug:
@@ -253,11 +252,7 @@ def get_events(df, fps, worm_length = None, _is_debug=False):
         plt.plot(dist_from_food_edge)
         plt.plot(food_region*edge_offset_lower)
         
-    
-    #get event durations
-    event_durations_df = get_event_durations_w(events_df, fps)
-    
-    return events_df, event_durations_df       
+    return events_df       
 
 #%%
 def _get_event_stats(event_durations, n_worms_estimate, total_time):
@@ -349,7 +344,11 @@ if __name__ == '__main__':
         worm_data = timeseries_data[timeseries_data['worm_index']==worm_index]
         worm_length = worm_data['length'].median()
         
-        events_df, event_durations_df = get_events(worm_data, fps, _is_debug=True)
+        events_df = get_events(worm_data, fps, _is_debug=True)
+        #get event durations
+        event_durations_df = get_event_durations_w(events_df, fps)
+    
+    
     #%%
     from tierpsy_features.helper import get_n_worms_estimate
     
