@@ -18,5 +18,8 @@ fnames = glob.glob(os.path.join(main_dir, '**', '*_featuresN.hdf5'), recursive=T
 for ii, fname in enumerate(fnames):
     print(ii+1, len(fnames))
     skeletons_file = fname.replace('_featuresN', '_skeletons')
-    with tables.File(fname, 'r+') as fid:
-        fid.get_node('/trajectories_data')._v_attrs['ventral_side'] = read_ventral_side(skeletons_file)
+    try:
+        with tables.File(fname, 'r+') as fid:
+            fid.get_node('/trajectories_data')._v_attrs['ventral_side'] = read_ventral_side(skeletons_file)
+    except tables.exceptions.NoSuchNodeError:
+        pass
