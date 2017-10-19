@@ -226,8 +226,9 @@ def _get_path_coverage_feats(timeseries_data, bin_size_microns):
     cols = [x for x in timeseries_data if x in path_curvature_columns_aux]
     path_coords_df = timeseries_data[cols]
     
+    
     bin_vals = ((path_coords_df - path_coords_df.mean())/bin_size_microns).round()
-    bin_vals = bin_vals.fillna(method='ffill').astype(np.int)
+    bin_vals = bin_vals.fillna(method='ffill').fillna(method='bfill').astype(np.int)
     
     path_coverage_feats = {}
     for b_part in set(x.rpartition('_')[-1] for x in bin_vals.columns):
