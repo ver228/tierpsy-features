@@ -390,8 +390,7 @@ if __name__ == '__main__':
     for fname, (ii, row) in zip(fnames, info_df.iterrows()):
         print(ii+1, len(info_df))
         
-        ventral_side = read_ventral_side(fname)
-#        
+        ventral_side = read_ventral_side(fname)       
 #        with pd.HDFStore(fname, 'r') as fid:
 #            fps = fid.get_storer('/trajectories_data').attrs['fps']
 #            timeseries_data = fid['/timeseries_data']

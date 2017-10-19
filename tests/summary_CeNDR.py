@@ -13,6 +13,7 @@ import tables
 import pandas as pd
 import numpy as np
 from tierpsy_features import ventral_signed_columns
+import multiprocessing as mp
 
 sys.path.append('/Users/ajaver/Documents/GitHub/process-rig-data/process_files')
 from misc import get_rig_experiments_df
@@ -101,26 +102,38 @@ def _ow_get_feat_stats(features_timeseries, features_events, FRAC_MIN=0.8):
     r_stats = sum(r_stats, [])
     r_stats += r_stats_m
 
-    r_stats = pd.DataFrame(r_stats, columns=['feat', 'value'])
+    r_stats = pd.DataFrame(r_stats, columns=['value', 'name'])
     return r_stats
 
-def read_ow_feats(experiments_df):
-    all_stats = []
-    for irow, row in experiments_df.iterrows():
-        print(irow+1, len(experiments_df))
-        features_file = os.path.join(row['directory'], row['base_name'] + '_features.hdf5')
-        
-        with pd.HDFStore(features_file, 'r') as fid:
-            features_timeseries = fid['/features_timeseries']
-            
-        features_events = _ow_read_feat_events(features_file)
-        features_stats = _ow_get_feat_stats(features_timeseries, features_events)
-        features_stats['experiment_id'] = row['id']
-         
-        all_stats.append(features_stats)
-    all_stats = pd.concat(all_stats)
+def _h_ow_process_row(dd):
+    irow, row = dd
+    print(irow+1, len(experiments_df))
+    features_file = os.path.join(row['directory'], row['base_name'] + '_features.hdf5')
     
+    with pd.HDFStore(features_file, 'r') as fid:
+        features_timeseries = fid['/features_timeseries']
+        
+    features_events = _ow_read_feat_events(features_file)
+    features_stats = _ow_get_feat_stats(features_timeseries, features_events)
+    features_stats['experiment_id'] = row['id']
+    
+    return features_stats
+
+def read_ow_feats(experiments_df):
+    n_batch= mp.cpu_count()
+    p = mp.Pool(n_batch)
+    
+    all_stats = list(p.map(_h_ow_process_row, experiments_df.iterrows()))
+    
+    if False:
+        all_stats = []
+        for dd in experiments_df.iterrows():
+            features_stats = _h_ow_process_row(dd)
+            all_stats.append(features_stats)
+    
+    all_stats = pd.concat(all_stats)
     feat_df = all_stats.pivot(index='experiment_id', columns='name', values='value')
+
     return feat_df
 
 def read_tierpsy_feats(experiments_df):
@@ -166,32 +179,17 @@ def ini_experiments_df():
     return experiments_df
 
 
+     
+    
 if __name__ == '__main__':
     experiments_df = ini_experiments_df()
     experiments_df = experiments_df[['id', 'strain', 'directory', 'base_name', 'exp_name']]
-#    
+    
 #    tierpsy_feats = read_tierpsy_feats(experiments_df)
 #    dd = experiments_df.join(tierpsy_feats)
 #    dd.to_csv('tierpsy_features_CeNDR.csv')
-    #%%
-    all_stats = []
-    for irow, row in experiments_df.iterrows():
-        print(irow+1, len(experiments_df))
-        features_file = os.path.join(row['directory'], row['base_name'] + '_features.hdf5')
-        
-        with pd.HDFStore(features_file, 'r') as fid:
-            features_timeseries = fid['/features_timeseries']
-            
-        features_events = _ow_read_feat_events(features_file)
-        features_stats = _ow_get_feat_stats(features_timeseries, features_events)
-        features_stats['experiment_id'] = row['id']
-         
-        all_stats.append(features_stats)
-    all_stats = pd.concat(all_stats)
     
-    ow_tierpsy_feats = all_stats.pivot(index='experiment_id', columns='name', values='value')
-    
-    #ow_tierpsy_feats = read_ow_feats(experiments_df)
+    ow_tierpsy_feats = read_ow_feats(experiments_df)
     dd = experiments_df.join(ow_tierpsy_feats)
     dd.to_csv('ow_features_CeNDR.csv')
     
