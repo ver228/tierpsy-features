@@ -66,13 +66,13 @@ def get_velocity(skeletons, partition, delta_frames, fps):
     coords, orientation_v = _h_segment_position(skeletons, partition = partition)
     
     if np.any(np.isnan(coords[:, 0])):
-    
         x = np.arange(coords.shape[0])
         xp = np.where(~np.isnan(coords[:, 0]))[0]
-        
-        for ii in range(coords.shape[1]):
-            coords[:, ii] = np.interp(x, xp, coords[xp, ii])
-            orientation_v[:, ii] = np.interp(x, xp, orientation_v[xp, ii])
+        if xp.size > 2:
+            #I only do this if there are actually some points to interpolate
+            for ii in range(coords.shape[1]):
+                coords[:, ii] = np.interp(x, xp, coords[xp, ii])
+                orientation_v[:, ii] = np.interp(x, xp, orientation_v[xp, ii])
     
     velocity = _h_get_velocity(coords, delta_frames, fps)
     speed = np.linalg.norm(velocity, axis=1)

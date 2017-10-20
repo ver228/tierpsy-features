@@ -46,14 +46,21 @@ def _h_path_curvature(skeletons,
         #caculate the length if it is not given
         body_length = np.nanmedian(get_length(skeletons))
     #clip_val = clip_val_body_lengths/body_length
-    
+
     p_obj = DataPartition(n_segments=skeletons.shape[1])
     body_coords = p_obj.apply(skeletons, partition_str, func=np.mean)
     
+
     xx = body_coords[:,0]
     yy = body_coords[:,1]
     tt = np.arange(body_coords.shape[0])
     
+    #empty array return
+    if body_coords.size == 0 or np.all(np.isnan(body_coords)):
+        return np.full_like(tt, np.nan), body_coords
+
+
+    #interpolate nan values
     good = ~np.isnan(xx)
     
     x_i = xx[good] 
@@ -157,8 +164,8 @@ def get_path_curvatures(skeletons, **argkws):
         path_coords.append(('coord_x_' + partition_str, coords[...,0]))
         path_coords.append(('coord_y_' + partition_str, coords[...,1]))
         
-    
     cols, dat = zip(*path_curvatures)
+    
     path_curvatures_df = pd.DataFrame(np.array(dat).T, columns=cols)
     
     cols, dat = zip(*path_coords)
@@ -227,9 +234,14 @@ def _get_path_coverage_feats(timeseries_data, bin_size_microns):
     path_coords_df = timeseries_data[cols]
     
     
+
     bin_vals = ((path_coords_df - path_coords_df.mean())/bin_size_microns).round()
-    bin_vals = bin_vals.fillna(method='ffill').fillna(method='bfill').astype(np.int)
-    
+    try:
+        bin_vals = bin_vals.fillna(method='ffill').fillna(method='bfill').astype(np.int)
+    except ValueError:
+        #likely full of nan's return empty
+        return {}
+
     path_coverage_feats = {}
     for b_part in set(x.rpartition('_')[-1] for x in bin_vals.columns):
         dat = bin_vals[['coord_x_' + b_part,'coord_y_' + b_part]]
@@ -257,9 +269,12 @@ def _get_path_coverage_feats(timeseries_data, bin_size_microns):
             #b_id = xx[b_flags]
             b_s = np.diff(np.insert(np.where(b_flags)[0], 0, -1))
             grid_durations.append(b_s)
-        grid_durations = np.concatenate(grid_durations)
-        
-        
+
+        if grid_durations:
+            grid_durations = np.concatenate(grid_durations)
+        else:
+            grid_durations = np.zeros(0)
+
         path_coverage_feats[b_part] = (grid_counts, grid_durations)
         
         
@@ -283,9 +298,17 @@ def get_path_extent_stats(timeseries_data, fps, is_normalized = False):
     
     grid_stats = []
     for b_part, (grid_counts, grid_durations) in path_coverage_feats.items():
-        grid_transit_time = np.percentile(grid_durations, Q)/fps
-        path_density = np.percentile(grid_counts['Counts'], Q)/grid_counts['Counts'].sum()
-        path_coverage = grid_counts['Counts'].size*area_per_grid
+        if grid_durations.size > 0:
+            grid_transit_time = np.percentile(grid_durations, Q)/fps
+        else:
+            grid_transit_time = (np.nan, np.nan)
+
+        if grid_counts['Counts'].size > 0:
+            path_coverage = grid_counts['Counts'].size*area_per_grid
+            path_density = np.percentile(grid_counts['Counts'], Q)/grid_counts['Counts'].sum()
+        else:
+            path_coverage = np.nan 
+            path_density = (np.nan, np.nan)
         
         posfix = b_part + is_norm_str
         grid_stats += [

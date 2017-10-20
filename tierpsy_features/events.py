@@ -259,7 +259,9 @@ def _get_event_stats(event_durations, n_worms_estimate, total_time):
     '''
     Get the event statistics using the event durations table.
     '''
-    
+    if event_durations.size == 0:
+        return pd.Series() 
+
     all_events_time = event_durations.groupby('event_type').agg({'duration':'sum'})['duration']
     event_g = event_durations.groupby(('event_type', 'region'))
     event_stats = []
@@ -307,10 +309,12 @@ def get_event_durations(timeseries_data, fps):
         dur = get_event_durations_w(dat, fps)
         dur['worm_index'] = worm_index
         event_durations.append(dur)
-        
-    event_durations = pd.concat(event_durations, ignore_index=True)
-
-    return event_durations
+    
+    if event_durations:
+        event_durations = pd.concat(event_durations, ignore_index=True)
+        return event_durations
+    else:
+        return pd.DataFrame()
 
 
 def get_event_stats(timeseries_data, fps, n_worms_estimate):
