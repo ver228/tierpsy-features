@@ -10,6 +10,10 @@ import pandas as pd
 import numpy as np
 import tables
 
+CeNDR_base_strains = ['N2', 'ED3017', 'CX11314', 'LKC34', 'MY16', 'DL238', 'JT11398', 'JU775',
+       'JU258', 'MY23', 'EG4725', 'CB4856']
+
+
 save_dir = '/Users/ajaver/OneDrive - Imperial College London/tierpsy_features/comparisons/CeNDR/'
 
 feat_files = {
@@ -70,10 +74,10 @@ for db_name, datasets  in sets2test.items():
     
     x_test = datasets['test'][col_feats].values
     y_test = datasets['test']['strain_id'].values
-    #%%
+    
     clf = RandomForestClassifier(n_estimators=1000)
     clf.fit(X_train, Y_train)
-    #%%
+    
     proba = clf.predict_proba(x_test)
     top_pred = np.argsort(proba, axis=1)[: ,::-1]
     preds = top_pred==y_test[:, np.newaxis]
@@ -81,3 +85,37 @@ for db_name, datasets  in sets2test.items():
     
     
     classifiers_d[db_name] = clf
+    
+#%%
+CeNDR_base_strains_id = {x:i for i,x in enumerate(CeNDR_base_strains)}
+
+classifiers_d = {}
+for db_name, datasets  in sets2test.items():
+    
+    
+    col2ignore = ['Unnamed: 0', 'id', 'directory', 'base_name', 'exp_name', 'strain']
+    col_feats = [x for x in datasets['train'].columns if x not in col2ignore]
+    
+    ss = datasets['train']
+    ss = ss[ss['strain'].isin(CeNDR_base_strains)]
+    X_train = ss[col_feats].values
+    Y_train = ss['strain'].map(CeNDR_base_strains_id).values
+    print(db_name, ss.shape)
+    
+    
+    ss = datasets['test']
+    ss = ss[ss['strain'].isin(CeNDR_base_strains)]
+    x_test = ss[col_feats].values
+    y_test = ss['strain'].map(CeNDR_base_strains_id).values
+    print(db_name, ss.shape)
+    
+    clf = RandomForestClassifier(n_estimators=10000)
+    clf.fit(X_train, Y_train)
+
+    proba = clf.predict_proba(x_test)
+    top_pred = np.argsort(proba, axis=1)[: ,::-1]
+    preds = top_pred==y_test[:, np.newaxis]
+    print(db_name, preds[:,0].mean())
+    
+    classifiers_d[db_name] = clf
+    
