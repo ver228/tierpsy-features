@@ -107,7 +107,7 @@ def _ow_get_feat_stats(features_timeseries, features_events, FRAC_MIN=0.8):
 
 def _h_ow_process_row(dd):
     irow, row = dd
-    print(irow+1, len(experiments_df))
+    print(irow+1)
     features_file = os.path.join(row['directory'], row['base_name'] + '_features.hdf5')
     
     with pd.HDFStore(features_file, 'r') as fid:
@@ -182,14 +182,18 @@ def ini_experiments_df():
      
     
 if __name__ == '__main__':
+    save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/CeNDR'
+    
     experiments_df = ini_experiments_df()
     experiments_df = experiments_df[['id', 'strain', 'directory', 'base_name', 'exp_name']]
     
 #    tierpsy_feats = read_tierpsy_feats(experiments_df)
 #    dd = experiments_df.join(tierpsy_feats)
-#    dd.to_csv('tierpsy_features_CeNDR.csv')
+#    save_name = os.path.join(save_dir, 'tierpsy_features_CeNDR.csv')
+#    dd.to_csv(save_name)
     
-    ow_tierpsy_feats = read_ow_feats(experiments_df)
-    dd = experiments_df.join(ow_tierpsy_feats)
-    dd.to_csv('ow_features_CeNDR.csv')
+    ow_feats = read_ow_feats(experiments_df)
+    dd = experiments_df.join(ow_feats)
+    save_name = os.path.join(save_dir, 'ow_features_CeNDR.csv')
+    dd.to_csv(save_name)
     
