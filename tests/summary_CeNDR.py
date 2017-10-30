@@ -13,6 +13,7 @@ import tables
 import pandas as pd
 import numpy as np
 from tierpsy_features import ventral_signed_columns
+from functools import partial
 import multiprocessing as mp
 
 sys.path.append('/Users/ajaver/Documents/GitHub/process-rig-data/process_files')
@@ -57,7 +58,7 @@ def _ow_read_feat_events(features_file):
     
     return features_events
 
-def _ow_get_feat_stats(features_timeseries, features_events, FRAC_MIN=0.8):
+def _ow_get_feat_stats(features_timeseries, features_events, FRAC_MIN):
     #%%
     #columns that correspond to indexes (not really features)
     index_cols =['worm_index','timestamp','skeleton_id','motion_modes']
@@ -105,7 +106,7 @@ def _ow_get_feat_stats(features_timeseries, features_events, FRAC_MIN=0.8):
     r_stats = pd.DataFrame(r_stats, columns=['value', 'name'])
     return r_stats
 
-def _h_ow_process_row(dd):
+def _h_ow_process_row(dd, FRAC_MIN):
     irow, row = dd
     print(irow+1)
     features_file = os.path.join(row['directory'], row['base_name'] + '_features.hdf5')
@@ -114,16 +115,16 @@ def _h_ow_process_row(dd):
         features_timeseries = fid['/features_timeseries']
         
     features_events = _ow_read_feat_events(features_file)
-    features_stats = _ow_get_feat_stats(features_timeseries, features_events)
+    features_stats = _ow_get_feat_stats(features_timeseries, features_events, FRAC_MIN=FRAC_MIN)
     features_stats['experiment_id'] = row['id']
     
     return features_stats
 
-def read_ow_feats(experiments_df):
+def read_ow_feats(experiments_df, FRAC_MIN=0.8):
     n_batch= mp.cpu_count()
     p = mp.Pool(n_batch)
-    
-    all_stats = list(p.map(_h_ow_process_row, experiments_df.iterrows()))
+    row_fun = partial(_h_ow_process_row, FRAC_MIN = FRAC_MIN)
+    all_stats = list(p.map(row_fun, experiments_df.iterrows()))
     
     if False:
         all_stats = []

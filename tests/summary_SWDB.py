@@ -67,8 +67,8 @@ if __name__ == '__main__':
 #    dd = experiments_df.join(tierpsy_feats)
 #    dd.to_csv(save_name, index_label=False)
     #%%
-    ow_feats = read_ow_feats(experiments_df)    
-    save_name = os.path.join(save_dir, 'ow_features_SWDB.csv', FRAC_MIN=0.25)
+    ow_feats = read_ow_feats(experiments_df, FRAC_MIN=0.25)    
+    save_name = os.path.join(save_dir, 'ow_features_SWDB.csv')
     dd = experiments_df.join(ow_feats)
     dd.to_csv(save_name)
     
