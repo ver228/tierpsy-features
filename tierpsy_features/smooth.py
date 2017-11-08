@@ -206,9 +206,9 @@ class SmoothedWorm():
         f = interp1d(x, y)
         y_interp = f(x_pred)
 
-        if y_interp.size <= s_win:
+        if (s_win is None) or (y_interp.size <= s_win):
             return y_interp
-
+            
         y_smooth = savgol_filter(y_interp, s_win, self.pol_degree)
         return y_smooth
 
@@ -248,8 +248,6 @@ class SmoothedWorm():
         return dat_all_s
 
     def _smooth_coords(self, frames_to_interpolate, s_win):
-        if s_win is None:
-            return
         
         if frames_to_interpolate is None:
             frames_to_interpolate = np.arange(self.skeleton.shape[0])
