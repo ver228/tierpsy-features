@@ -24,9 +24,15 @@ def _h_orientation_vector(x, axis=None):
     return x[:, 0, :] - x[:, -1, :]
 
 def _h_get_velocity(x, delta_frames, fps):
+    if delta_frames < 1:
+        raise ValueError('Invalid number of delta frames %i' % delta_frames)
     delta_time = delta_frames/fps
+    if x.shape[0] < delta_frames:
+        #not enough frames return empty array
+        return np.full_like(v, np.nan)
+
     v = (x[delta_frames:] - x[:-delta_frames])/delta_time
-    
+
     #pad with nan so the vector match the original vectors
     pad_w = [(int(np.floor(delta_frames/2)), int(np.ceil(delta_frames/2)))]
     
