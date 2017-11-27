@@ -7,3 +7,5 @@
 
 
 tests/anova_tests/**
+
+experiments/classify/pca/results/**
