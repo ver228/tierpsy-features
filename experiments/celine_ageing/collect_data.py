@@ -29,7 +29,7 @@ def get_file_parts(fnames):
         
         ts = pd.Timestamp(*[int(x) for x in parts[5:12] if x])
         
-        dd = (fdir, bn, Rn, strain, worm_id, day, v_orientation, ts)
+        dd = (fdir, bn, Rn, strain.upper(), worm_id, day, v_orientation, ts)
         all_data.append(dd)
         
     df = pd.DataFrame(all_data, columns=['directory', 'base_name', 'replicated_n', 'strain', 'worm_id', 'day', 'ventral_orientation', 'timestamp'])
