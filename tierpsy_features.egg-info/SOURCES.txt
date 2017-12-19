@@ -1,9 +1,15 @@
 setup.py
 tierpsy_features/__init__.py
 tierpsy_features/_version.py
+tierpsy_features/curvatures.py
+tierpsy_features/events.py
+tierpsy_features/features.py
+tierpsy_features/food.py
 tierpsy_features/helper.py
+tierpsy_features/path.py
 tierpsy_features/postures.py
 tierpsy_features/smooth.py
+tierpsy_features/summary_stats.py
 tierpsy_features/velocities.py
 tierpsy_features.egg-info/PKG-INFO
 tierpsy_features.egg-info/SOURCES.txt
