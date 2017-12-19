@@ -8,4 +8,4 @@
 
 tests/anova_tests/**
 
-experiments/classify/pca/results/**
+experiments/classify/pca/results/*
