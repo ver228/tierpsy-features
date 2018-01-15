@@ -110,7 +110,7 @@ if __name__ == '__main__':
     cross_validation_fold, base_strains, main_file, save_dir, feat_files = _get_args('SWDB')
     
     
-    feat_files = {'OW_old':feat_files['OW_old']}
+    #feat_files = {'OW_old':feat_files['OW_old']}
     #%%
     
     with pd.HDFStore(main_file, 'r') as fid:
@@ -153,6 +153,8 @@ if __name__ == '__main__':
         feat_data[db_name] = feats
         
     col2ignore_r = col2ignore + ['strain_base_id', 'strain_id', 'set_type']
+    
+    
     #%%
     if False:
         n_trials = 200

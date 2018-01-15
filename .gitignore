@@ -8,4 +8,9 @@
 
 tests/anova_tests/**
 
-experiments/classify/pca/results/*
+experiments/pca/results/*
+
+experiments/celine_ageing/*.png
+
+
+experiments/classify/data/**
