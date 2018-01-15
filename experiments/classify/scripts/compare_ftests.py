@@ -64,7 +64,7 @@ if __name__ == '__main__':
     MAX_FRAC_NAN = 0.25
     
     
-    MIN_N_VIDEOS, save_dir, feat_files = _get_args('CeNDR')
+    MIN_N_VIDEOS, save_dir, feat_files = _get_args('SWDB')
     
 
     
