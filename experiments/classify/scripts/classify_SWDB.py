@@ -8,71 +8,20 @@ Created on Thu Oct 19 18:23:00 2017
 import os
 import pandas as pd
 import numpy as np
-import tables
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.ensemble import ExtraTreesClassifier#RandomForestClassifier
 from sklearn.model_selection import cross_val_score
-import random
+import pickle
 import itertools
 import multiprocessing as mp
 
 import time
 import matplotlib.pylab as plt
-from sklearn.metrics import confusion_matrix
-
+from sklearn.metrics import confusion_matrix, f1_score
 from compare_ftests import col2ignore
 
 from tqdm import tqdm
-
-def plot_confusion_matrix(cm, classes,
-                          normalize=False,
-                          title='Confusion matrix',
-                          cmap=plt.cm.Blues):
-    #based on http://scikit-learn.org/stable/auto_examples/model_selection/plot_confusion_matrix.html
-    """
-    This function prints and plots the confusion matrix.
-    Normalization can be applied by setting `normalize=True`.
-    """
-    if normalize:
-        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        print("Normalized confusion matrix")
-    else:
-        print('Confusion matrix, without normalization')
-
-    cmap=plt.cm.Blues
-    
-    plt.imshow(cm, interpolation='nearest', cmap=cmap)
-    np.set_printoptions(precision=2)
-    
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
-    thresh = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        plt.text(j, i, '%1.2f' % cm[i, j],
-                 horizontalalignment="center",
-                 fontsize =12,
-                 color="white" if cm[i, j] > thresh else "black")
-    #plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-
-
-def _h_cross_validate(args):
-    feats_r, col_feats, id_index_str, n_samples, cross_validation_fold, n_estimators = args
-    ss = feats_r.groupby('strain').apply(lambda x :x.iloc[random.sample(range(0,len(x)), n_samples)])
-    xx = ss[col_feats].values
-    
-    #center, this shouldn't make that much different in random forest
-    #xx = (xx-np.mean(xx, axis=0))/(np.std(xx, axis=0))
-    #xx = xx[:, ~np.any(np.isnan(xx), axis=0)]
-    
-    yy = ss[id_index_str].values
-    
-    clf = RandomForestClassifier(n_estimators=n_estimators)
-    scores = cross_val_score(clf, xx, yy, cv = cross_validation_fold)
-    #print(scores)
-    return scores
-
+#%%
 
 
 if __name__ == '__main__':
@@ -80,15 +29,14 @@ if __name__ == '__main__':
     #save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/SWDB/'
     save_dir = '../data/SWDB'
     feat_files = {
-            'OW_old' : 'ow_features_old_SWDB.csv',
-            'OW' : 'ow_features_SWDB.csv',
-            'tierpsy' :'tierpsy_features_SWDB.csv'
+            'OW' : 'F0.025_ow_features_old_SWDB.csv',
+            'tierpsy' :'F0.025_tierpsy_features_SWDB.csv'
             }
     
-    #%%
+    
     feat_data = {}
     for db_name, bn in feat_files.items():
-        fname = os.path.join(save_dir, 'F_' + bn)
+        fname = os.path.join(save_dir, bn)
         feats = pd.read_csv(fname)
         
         ss = np.sort(feats['strain'].unique())
@@ -104,9 +52,8 @@ if __name__ == '__main__':
     
     
     #%%
-    from sklearn.model_selection import StratifiedShuffleSplit
-    from sklearn.metrics import f1_score
-    n_estimators = 200
+    n_estimators = 1000
+    n_jobs = 24
     
     results = {}
     for db_name, feats in feat_data.items():
@@ -120,23 +67,103 @@ if __name__ == '__main__':
         res = []
         sss = StratifiedShuffleSplit(n_splits = 10, test_size = 0.2, random_state=777)
         for ii, (train_index, test_index) in enumerate(sss.split(X, y)):
-            
+            #%%
             x_train, y_train  = X[train_index], y[train_index]
             x_test, y_test  = X[test_index], y[test_index]
             
-            clf = RandomForestClassifier(n_estimators = n_estimators)
+            clf = ExtraTreesClassifier(n_estimators = n_estimators, 
+                                       #max_features=128, 
+                                       class_weight = 'balanced',
+                                       n_jobs = n_jobs,
+                                       verbose=1)
             clf.fit(x_train, y_train)
             
-            y_pred = clf.predict(x_test)
+            y_pred_proba = clf.predict_proba(x_test)
+            res.append((y_test, y_pred_proba, clf.feature_importances_.copy()))
+            
+            y_pred = np.argmax(y_pred_proba, axis=-1)
             
             f1 = f1_score(y_test, y_pred, average='weighted')
-            
             print(ii, f1)
-            res.append((clf, f1))
         
+        results[db_name] = (res, col_feats)
+    #%%
+    save_model_name = 'RF_class_results_SB.pkl'
+    #%%
+    with open(save_model_name, 'wb') as f:
+        pickle.dump(results, f, pickle.HIGHEST_PROTOCOL)
+    
+    #%%
+    with open(save_model_name, 'rb') as f:
+        results = pickle.load(f)
+    
+    #%%
+    strains = np.sort(feats['strain'].unique())
+    
+    for db_name, (res, col_feats) in results.items():
+        y_test, y_pred_proba, f_importances = map(np.array, list(zip(*res)))
         
-        results[db_name] = res
+        ind_s = np.argsort(y_pred_proba, axis=-1)
         
+        _, _, real_t = np.where(ind_s == y_test[..., None])
+        real_t = 357 - real_t
+    
+        print(db_name)
+        for tt in [1, 2, 3, 5, 10, 20, 50, 100]:
+            print('top {} : {}'.format(tt, np.mean(real_t<tt)))
+    #%%
+    res_sum = {}
+    for db_name, (res,col_feats) in results.items():
+        y_test, y_pred_proba, f_importances = map(np.array, list(zip(*res)))
+        f_importances_avg = np.mean(f_importances, axis=0)
+        f_importances_avg = pd.Series(f_importances_avg, index= col_feats)
+        f_importances_avg = f_importances_avg.sort_values()
+        
+        y_pred = np.argmax(y_pred_proba, axis=-1)
+        cm = confusion_matrix(y_test.flatten(), y_pred.flatten())
+        
+        tp = np.diag(cm)
+        tp_fp = cm.sum(axis=1) + 1e-10
+        tp_fn = cm.sum(axis=0) + 1e-10
+        
+        precision = tp/tp_fp
+        recall = tp/tp_fn
+        F1 = 2 * (precision * recall) / (precision + recall + 1e-10)
+        
+        stat = (precision, recall, F1)
+        
+        res_sum[db_name] = (f_importances_avg, cm, stat)
+    #%%
+    y_tierpsy = res_sum['tierpsy'][-1][-1]
+    y_OW = res_sum['OW'][-1][-1]
+    
+    ind_t = np.argsort(y_tierpsy)
+    ind_ow = np.argsort(y_OW)
+    
+    h_ow, = plt.plot(y_OW[ind_ow], label = 'OW')
+    h_ti, = plt.plot(y_tierpsy[ind_t], label = 'tierpsy')
+    
+    
+    plt.legend(handles = [h_ow, h_ti])
+    
+    #%%
+    y_tierpsy = res_sum['tierpsy'][0]
+    y_OW = res_sum['OW'][0]
+    
+    plt.figure()
+    l_h = []
+    for k, val in res_sum.items():
+        val = val[0]
+        yy = val.values#*val.size
+        
+        xx = np.linspace(0, 1, val.size)
+        
+        #h, = plt.plot(xx, yy, label = k)
+        h, = plt.plot(yy, label = k)
+        l_h.append(h)
+    
+    plt.legend(handles = l_h)
+    plt.title('Feature Importances')
     #%%
 #    cross_validation_fold = 5
 #    n_trials = 200

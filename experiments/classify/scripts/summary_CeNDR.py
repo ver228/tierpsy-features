@@ -16,8 +16,7 @@ from tierpsy_features import ventral_signed_columns
 from functools import partial
 import multiprocessing as mp
 
-sys.path.append('/Users/ajaver/Documents/GitHub/process-rig-data/process_files')
-from misc import get_rig_experiments_df
+
 
 #the sign of this features is related with the ventral orientation. This is not defined in the multiworm case.
 _ow_signed_ventral_feats = ['head_bend_mean', 'neck_bend_mean', 
@@ -158,6 +157,9 @@ def read_tierpsy_feats(experiments_df):
     return feat_df
 
 def ini_experiments_df():
+    sys.path.append('/Users/ajaver/Documents/GitHub/process-rig-data/process_files')
+    from misc import get_rig_experiments_df
+
     exp_set_dir = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR'
     csv_dir = os.path.join(exp_set_dir, 'ExtraFiles')
     feats_dir = os.path.join(exp_set_dir, 'Results')

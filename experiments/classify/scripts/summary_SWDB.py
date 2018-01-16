@@ -31,7 +31,9 @@ def _h_process_row(dd):
 
 
 if __name__ == '__main__':
-    save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/SWDB'
+    #save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/SWDB'
+    save_dir = './'
+    
     conn = pymysql.connect(host='localhost', database='single_worm_db')
 
     sql = '''

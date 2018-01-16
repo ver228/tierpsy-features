@@ -26,22 +26,23 @@ col2ignore = ['Unnamed: 0', 'exp_name', 'id', 'base_name', 'date',
        'worm_index', 'n_frames', 'n_valid_skel', 'first_frame']
 
 
-
+#MAIN_DIR = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/'
+MAIN_DIR = '../data/'#'/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/'
 
 def _get_args(set_type):
     if set_type == 'CeNDR':
         MIN_N_VIDEOS = 3
-        save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/CeNDR/'
+        save_dir = os.path.join(MAIN_DIR, 'CeNDR/')
         feat_files = {
                 'OW' : 'ow_features_CeNDR.csv',
                 'tierpsy' :'tierpsy_features_CeNDR.csv'
                 }
     elif set_type == 'SWDB':
         MIN_N_VIDEOS = 10
-        save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/SWDB/'
+        save_dir = os.path.join(MAIN_DIR, 'SWDB/')
         feat_files = {
                 'OW_old' : 'ow_features_old_SWDB.csv',
-                'OW' : 'ow_features_SWDB.csv',
+                #'OW' : 'ow_features_SWDB.csv',
                 'tierpsy' :'tierpsy_features_SWDB.csv'
                 }
     return MIN_N_VIDEOS, save_dir, feat_files
@@ -59,30 +60,27 @@ def _h_ftest(columns, feats_g):
         if ~np.isnan(pvalue):
             all_f.append((col, fstats, pvalue))
     return all_f
-
+#%%
 if __name__ == '__main__':
-    MAX_FRAC_NAN = 0.25
+    MAX_FRAC_NAN = 0.025#0.25
     
     
     MIN_N_VIDEOS, save_dir, feat_files = _get_args('SWDB')
-    
-
     
     all_features = {}
     for db_name, feat_file in feat_files.items():
         print(db_name)
         feats = pd.read_csv(save_dir + feat_file)
-        
-        
         dd = feats.isnull().mean()
+        
         col2remove =  dd.index[(dd>MAX_FRAC_NAN).values].tolist()
         feats = feats[[x for x in feats if x not in col2remove]]
         all_features[db_name] = feats
     
-    assert (all_features['OW']['base_name'].values == all_features['tierpsy']['base_name'].values).all()
+    assert (all_features['OW_old']['base_name'].values == all_features['tierpsy']['base_name'].values).all()
     
     #%%
-    dd = all_features['OW']['strain'].value_counts()
+    dd = all_features['OW_old']['strain'].value_counts()
     good_strains = dd.index[(dd>=MIN_N_VIDEOS).values].values
     
     for db_name, feats in all_features.items():
@@ -166,7 +164,7 @@ if __name__ == '__main__':
     #%%
     for db_name, feats in all_features.items():
         bn = feat_files[db_name]
-        fname = os.path.join(save_dir, 'F_' + bn)
+        fname = os.path.join(save_dir, 'F{:.3}_{}'.format(MAX_FRAC_NAN, bn))
         feats.to_csv(fname)
     
     #%%
