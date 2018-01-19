@@ -37,8 +37,8 @@ if __name__ == '__main__':
         
     col2ignore_r = col2ignore + ['strain_id', 'set_type']
     #%%
-    n_jobs = 16
-    n_estimators = 1000
+    n_jobs = 6
+    n_estimators = 10
     
     results = {}
     for db_name, feats in feat_data.items():
@@ -54,7 +54,7 @@ if __name__ == '__main__':
                                            n_jobs = n_jobs
                                            )  
         
-        selector = RFECV(clf, step=1, cv=10, verbose=1)
+        selector = RFECV(clf, step=1, cv=10, verbose=2)
         selector = selector.fit(X, y)
         
         results[db_name] = selector

@@ -9,7 +9,7 @@ import os
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn.ensemble import ExtraTreesClassifier#RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.model_selection import cross_val_score
 import pickle
 import itertools
@@ -50,10 +50,15 @@ if __name__ == '__main__':
         
     col2ignore_r = col2ignore + ['strain_id', 'set_type']
     
+    #%% create a dataset with all the features
+    feats = feat_data['OW']
+    col_feats = [x for x in feats.columns if x not in col2ignore_r]
+    feats = feats[col_feats + ['base_name']]
+    feat_data['all'] = feat_data['tierpsy'].merge(feats, on='base_name')
     
     #%%
     n_estimators = 1000
-    n_jobs = 24
+    n_jobs = 12
     
     results = {}
     for db_name, feats in feat_data.items():
@@ -71,8 +76,8 @@ if __name__ == '__main__':
             x_train, y_train  = X[train_index], y[train_index]
             x_test, y_test  = X[test_index], y[test_index]
             
-            clf = ExtraTreesClassifier(n_estimators = n_estimators, 
-                                       #max_features=128, 
+            clf = RandomForestClassifier(n_estimators = n_estimators, 
+                                       criterion = 'gini',
                                        class_weight = 'balanced',
                                        n_jobs = n_jobs,
                                        verbose=1)
@@ -84,7 +89,7 @@ if __name__ == '__main__':
             y_pred = np.argmax(y_pred_proba, axis=-1)
             
             f1 = f1_score(y_test, y_pred, average='weighted')
-            print(ii, f1)
+            print(db_name, ii, f1)
         
         results[db_name] = (res, col_feats)
     #%%
@@ -133,19 +138,20 @@ if __name__ == '__main__':
         stat = (precision, recall, F1)
         
         res_sum[db_name] = (f_importances_avg, cm, stat)
+        
+        
+        cm_n = cm/(cm.sum(axis=1) + 1e-10)
     #%%
-    y_tierpsy = res_sum['tierpsy'][-1][-1]
-    y_OW = res_sum['OW'][-1][-1]
+    plt.figure()
+    l_h = []
+    for k, val in res_sum.items():
+        y = np.sort(val[-1][-1])
     
-    ind_t = np.argsort(y_tierpsy)
-    ind_ow = np.argsort(y_OW)
+        h, = plt.plot(y, label = k)
+        l_h.append(h)
     
-    h_ow, = plt.plot(y_OW[ind_ow], label = 'OW')
-    h_ti, = plt.plot(y_tierpsy[ind_t], label = 'tierpsy')
-    
-    
-    plt.legend(handles = [h_ow, h_ti])
-    
+    plt.legend(handles = l_h)
+    plt.title('Sorted f1-scores')
     #%%
     y_tierpsy = res_sum['tierpsy'][0]
     y_OW = res_sum['OW'][0]
@@ -154,12 +160,12 @@ if __name__ == '__main__':
     l_h = []
     for k, val in res_sum.items():
         val = val[0]
-        yy = val.values#*val.size
+        yy = val.values*val.size
         
         xx = np.linspace(0, 1, val.size)
         
-        #h, = plt.plot(xx, yy, label = k)
-        h, = plt.plot(yy, label = k)
+        h, = plt.plot(xx, yy, label = k)
+        #h, = plt.plot(yy, label = k)
         l_h.append(h)
     
     plt.legend(handles = l_h)
