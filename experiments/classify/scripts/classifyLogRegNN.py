@@ -15,45 +15,124 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 from torch import optim
+from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
-
-from sklearn.model_selection import StratifiedShuffleSplit
-
-def build_model(input_dim, output_dim):
-    # We don't need the softmax layer here since CrossEntropyLoss already
-    # uses it internally.
-    model = torch.nn.Sequential()
-    model.add_module("linear",
-                     torch.nn.Linear(input_dim, output_dim, bias=False))
-    return model
-
-
-def train(model, loss, optimizer, x_val, y_val):
-    x = Variable(x_val, requires_grad=False)
-    y = Variable(y_val, requires_grad=False)
-
-    # Reset gradient
-    optimizer.zero_grad()
-
-    # Forward
-    fx = model.forward(x)
-    output = loss.forward(fx, y)
-
-    # Backward
-    output.backward()
-
-    # Update parameters
-    optimizer.step()
-
-    return output.data[0]
-
-
-
+import torch.nn.functional as F
 
 import os
 import pandas as pd
 from sklearn.metrics import confusion_matrix, f1_score
 from compare_ftests import col2ignore
+from sklearn.model_selection import StratifiedShuffleSplit
+
+import tqdm
+
+class SimpleNet(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super().__init__()
+        self.fc = nn.Linear(input_dim, output_dim, bias=False)
+    
+    def forward(self, x):
+        x = self.fc(x)
+        return F.log_softmax(x, dim=1)
+
+
+
+def _train_step(model, criterion, optimizer, input_v, target_v, cuda_id = 0):
+    
+    target_v = target_v.cuda(cuda_id)
+    input_v = input_v.cuda(cuda_id)
+    
+    input_v = Variable(input_v, requires_grad=False)
+    target_v = Variable(target_v, requires_grad=False)
+
+    # Reset gradient
+    optimizer.zero_grad()
+
+    # Forward
+    output = model(input_v)
+    loss = criterion(output, target_v)
+
+    # Backward
+    loss.backward()
+
+    # Update parameters
+    optimizer.step()
+
+    return loss.data[0]
+
+def fit_model(model, criterion, optimizer, loader, cuda_id = 0):
+    pbar = tqdm.trange(n_epochs)
+    for i in pbar:
+        #Train model
+        model.train()
+        train_loss = 0.
+        for k, (xx, yy) in enumerate(loader):
+            train_loss += _train_step(model, criterion, optimizer, xx, yy, cuda_id=cuda_id)
+        train_loss /= len(loader)
+        
+        d_str = "train loss = %f" % (train_loss)
+        pbar.set_description(d_str)
+    
+    return model
+
+def eval_model(model, criterion, input_v, target_v):
+    #Eval model
+    model.eval()
+    output = model(input_v)
+    
+    loss = criterion(output, target_v).data[0]
+    
+    _, y_pred = output.max(dim=1)
+    acc = (y_pred == target_v).float().mean().data[0]*100
+    
+    y_test_l, y_pred_l = target_v.cpu().data.numpy(), y_pred.cpu().data.numpy()
+    f1 = f1_score(y_test_l, y_pred_l, average='weighted')
+    
+    return loss, acc, f1
+
+def get_feat_importance(model, criterion, input_v, target_v):
+    n_features = model.fc.in_features
+    n_classes = model.fc.out_features
+    
+    model_reduced = SimpleNet(n_features-1, n_classes)
+    model_reduced.eval()
+    
+    inds = list(range(n_features))
+    res_selection = []
+    for ii in range(n_features):
+        ind_r = inds[:ii] + inds[ii+1:]
+        model_reduced.fc.weight.data = model.fc.weight[:, ind_r].data
+        input_r = input_v[:, ind_r]
+        
+        loss, acc, f1 = eval_model(model_reduced, criterion, input_r, target_v)
+        res_selection.append((loss, acc, f1))
+    
+    loss, acc, f1 = map(np.array, zip(*res_selection))
+    
+    
+    return dict(loss = loss, acc = acc, f1 = f1)
+
+def remove_feats(importance_metrics, metric2exclude, input_v, input_train, col_feats_o):
+    metrics = importance_metrics[metric2exclude]
+    
+    #remove the least important feature
+    if metric2exclude == 'loss':
+        ind2exclude = np.argmin(metrics)
+    else:
+        ind2exclude = np.argmax(metrics)
+    
+    
+    
+    inds = list(range(n_features)) 
+    ind_r = inds[:ind2exclude] + inds[ind2exclude+1:]
+    input_r = input_v[:, ind_r]
+    input_train_r = input_train[:, ind_r]
+    
+    col_feats_r = col_feats_o.copy()
+    feat2exclude = col_feats_r.pop(ind2exclude)
+    
+    return input_r, input_train_r, col_feats_r, feat2exclude
 
 if __name__ == "__main__":
     
@@ -63,8 +142,7 @@ if __name__ == "__main__":
             'OW' : 'F0.025_ow_features_old_SWDB.csv',
             'tierpsy' :'F0.025_tierpsy_features_SWDB.csv'
             }
-    
-    
+    #%%
     feat_data = {}
     for db_name, bn in feat_files.items():
         fname = os.path.join(save_dir, bn)
@@ -74,9 +152,12 @@ if __name__ == "__main__":
         s_dict = {s:ii for ii,s in enumerate(ss)}
         feats['strain_id'] = feats['strain'].map(s_dict)
         
+        #if db_name == 'tierpsy':
+        #    col_curv = [x for x in feats if 'path_curvature' in x]
+        #    feats[col_curv] = np.log10(np.abs(feats[col_curv]) + 1e-5)
+        
         #maybe i should divided it in train and test, but cross validation should be enough...
         feats['set_type'] = ''
-        
         feat_data[db_name] = feats
         
     col2ignore_r = col2ignore + ['strain_id', 'set_type']
@@ -96,11 +177,16 @@ if __name__ == "__main__":
     feat_data['all'] = feat_data['tierpsy'].merge(feats, on='base_name')
     
     #%%
-    n_estimators = 1000
-    n_jobs = 12
-    n_splits = 10
+    n_folds = 1
     batch_size = 250
-    n_epochs = 500
+    n_epochs = 50
+    
+    cuda_id = 1
+    
+    metric2exclude = 'loss'
+    #metric2exclude = 'acc'
+    
+    criterion = F.nll_loss
     
     results = {}
     for db_name, feats in feat_data.items():
@@ -110,69 +196,66 @@ if __name__ == "__main__":
         y = feats['strain_id'].values
         X = feats[col_feats].values
         
-        n_features = X.shape[1]
-        n_classes = y.shape[0]
+        n_classes = int(y.max() + 1)
         
-        res = []
-        sss = StratifiedShuffleSplit(n_splits = n_splits, test_size = 0.2, random_state=777)
-        for ii, (train_index, test_index) in enumerate(sss.split(X, y)):
-            if db_name != 'tierpsy':
-                continue
-            print(db_name, ii + 1, n_splits)
-            #%%
+        cross_v_res = []
+        sss = StratifiedShuffleSplit(n_splits = n_folds, test_size = 0.2, random_state=777)
+        for i_fold, (train_index, test_index) in enumerate(sss.split(X, y)):
+            print(db_name, i_fold + 1, n_folds)
+            
             x_train, y_train  = X[train_index], y[train_index]
             x_test, y_test  = X[test_index], y[test_index]
             
             
-            n_examples = train_index.size
-            
             x_train = torch.from_numpy(x_train).float()
             y_train = torch.from_numpy(y_train).long()
             
-            #this data I can leave it in the gpu()
-            x_test = torch.from_numpy(x_test).float().cuda() 
-            y_test = torch.from_numpy(y_test).long().cuda() 
+            x_test = torch.from_numpy(x_test).float()
+            y_test = torch.from_numpy(y_test).long() 
+            
+            input_v = Variable(x_test.cuda(cuda_id), requires_grad=False)
+            target_v = Variable(y_test.cuda(cuda_id), requires_grad=False)
+            
+            input_train = x_train
+            target_train = y_train
+            
+            col_feats_r = col_feats
             
             
-            dataset = TensorDataset(x_train, y_train)
-            loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-            
-            model = build_model(n_features, n_classes)
-            loss = torch.nn.CrossEntropyLoss(size_average=True)
-            
-            model = model.cuda()
-            loss = loss.cuda()
-            
-            optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum = 0.9)
-            #optimizer = optim.Adam(model.parameters(), lr=1e-3)
-            
-            
-            
-            for i in range(n_epochs):
-                cost = 0.
-                num_batches = n_examples // batch_size
-                for k, (xx, yy) in enumerate(loader):
-                    xx = xx.cuda()
-                    yy = yy.cuda()
+            fold_res = []
+            while col_feats_r: #continue as long as there are any feature to remove
+                n_features = input_v.size(1)
+                
+                model = SimpleNet(n_features, n_classes)
+                model = model.cuda(cuda_id)
+                
+                optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum = 0.9)
+                
+                dataset = TensorDataset(input_train, target_train)
+                loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+                
+                model = fit_model(model, criterion, optimizer, loader, cuda_id = cuda_id)
+                res = eval_model(model, criterion, input_v, target_v)
+                
+                print('Test: loss={:.4}, acc={:.2f}%, f1={:.4}'.format(*res))
+                print(metric2exclude, i_fold + 1, n_features)
+                
+                
+                if n_features > 1:
+                    importance_metrics = get_feat_importance(model, criterion, input_v, target_v)
                     
-                    start, end = k * batch_size, (k + 1) * batch_size
-                    cost += train(model, loss, optimizer, xx, yy)
+                    input_v, input_train, col_feats_r, feat2remove = \
+                    remove_feats(importance_metrics, metric2exclude, 
+                                 input_v, 
+                                 input_train, 
+                                 col_feats_r)
                 
                 
-                
-                if i % 100 == 99 or i == n_epochs-1:
-                    dd = Variable(x_test, requires_grad=False)
-                    output = model.forward(dd)
-                    y_pred_proba = output.data.cpu().numpy()
-                    y_pred = y_pred_proba.argmax(axis=1)
+                    fold_res.append((feat2remove, res))
+                else:
+                    fold_res.append((col_feats_r[0], res))
                     
-                    f1 = f1_score(y_test, y_pred, average='weighted')
-                    acc = 100. * np.mean(y_pred == y_test)
-                    print("Epoch %d, cost = %f, acc = %.2f%%, f1 = %.2f"
-                          % (i + 1, cost / num_batches, acc, f1))
-            
-            res.append((y_test, y_pred_proba, model))
+            cross_v_res.append(fold_res)
+        results[db_name] = cross_v_res
         
-        results[db_name] = (res, col_feats)
-            
-            
+    #%%
