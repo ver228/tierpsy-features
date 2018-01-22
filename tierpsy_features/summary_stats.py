@@ -350,57 +350,9 @@ def get_feat_stats_all(timeseries_data, blob_features, fps):
     return exp_feats
 
 if __name__ == '__main__':
-    import glob
-    import sys
-    import os
+    fname = '/Volumes/behavgenom_archive$/Avelino/screening/Swiss_Strains/Results/Swiss_Strains_Set1_250817/TR2171_worms10_food1-10_Set3_Pos4_Ch3_25082017_145511_featuresN.hdf5'
     
-    from tierpsy.helper.params import read_ventral_side
+    with pd.HDFStore(fname, 'r') as fid:
+        timeseries_features = fid['/timeseries_features']
+        blob_features = fid['/blob_features']
     
-    sys.path.append('/Users/ajaver/Documents/GitHub/process-rig-data/process_files')
-    from misc import get_rig_experiments_df
-    exp_set_dir = '/Users/ajaver/OneDrive - Imperial College London/swiss_strains'
-    csv_dir = os.path.join(exp_set_dir, 'ExtraFiles')
-    feats_dir = os.path.join(exp_set_dir, 'Results')
-    
-    set_type = 'featuresN'
-    
-    save_dir = './results_{}'.format(set_type)
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    
-    csv_files = glob.glob(os.path.join(csv_dir, '*.csv')) + glob.glob(os.path.join(csv_dir, '*.xlsx'))
-    
-    f_ext = '_{}.hdf5'.format(set_type)
-    features_files = glob.glob(os.path.join(feats_dir, '**/*{}'.format(f_ext)), recursive=True)
-    features_files = [x.replace(f_ext, '') for x in features_files]
-    
-    experiments = get_rig_experiments_df(features_files, csv_files)
-    
-    info_cols = ['strain']
-    
-    fnames = [os.path.join(row['directory'], row['base_name'] + f_ext)
-                for _, row in experiments.iterrows()]
-    info_df = experiments[info_cols]
-    
-    assert info_df.shape[0] == len(fnames)
-    
-    all_data = []
-    
-    
-    for fname, (ii, row) in zip(fnames, info_df.iterrows()):
-        print(ii+1, len(info_df))
-        
-        ventral_side = read_ventral_side(fname)       
-#        with pd.HDFStore(fname, 'r') as fid:
-#            fps = fid.get_storer('/trajectories_data').attrs['fps']
-#            timeseries_data = fid['/timeseries_data']
-#            blob_features = fid['/blob_features']
-#        
-#        exp_feats = get_feat_stats_all(timeseries_data, blob_features, fps)
-#        
-#        info_zip = zip(*[row.tolist()]*len(exp_feats))
-#        all_data += list(zip(*info_zip, exp_feats, exp_feats.index))
-#        
-#        print(len(all_data))
-#        
-#        break

@@ -322,9 +322,9 @@ if __name__ == "__main__":
     #%%
     
     for k, dat in res_db.items():
-        #if k != 'tierpsy': continue
+        #if k != 'OW': continue
         
-        plt.figure()
+        #plt.figure()
         
         dd = []
         for (feats, loss, acc, f1) in dat:
@@ -357,6 +357,16 @@ if __name__ == "__main__":
         feats = [x[0] for x in dat]
         feats = [sum(x, []) for x in feats]
         
+        
+        
+        col_feats = [x for x in feat_data[k].columns if x not in col2ignore_r]
+        for ff in feats:
+            dd = list(set(col_feats) - set(ff))
+            assert len(dd) == 1
+            ff.append(dd[0])
+        
+        
+        #min_ind = 20
         rr = None
         for ff in feats:
             s = ff[:min_ind]
@@ -374,3 +384,9 @@ if __name__ == "__main__":
                 rr2.intersection_update(s)
                
         print(k, tot, min_ind,len(rr), tot-min_ind, len(rr2))
+        
+        for ff in feats:
+            print(ff[-10:])
+        print('%%%%%%%%%%%%%%%%%%%%%%%%')
+        
+    #plt.xlim((0,20))
