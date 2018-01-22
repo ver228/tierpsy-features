@@ -9,7 +9,6 @@ Modified from:
     https://github.com/vinhkhuc/PyTorch-Mini-Tutorials/blob/master/2_logistic_regression.py
 """
 
-
 import numpy as np
 
 import torch
@@ -299,6 +298,11 @@ if __name__ == "__main__":
     save_name = 'RFE_SoftMax_F{}.pkl'.format(n_feats2remove)
     with open(save_name, "wb" ) as fid:
         pickle.dump(results, fid)
+    #%%
+    
+    with open(save_name, "rb" ) as fid:
+        results = pickle.dump(fid)
+    
     
     #res = softmax_RFE(all_data_in[4])
     #%%

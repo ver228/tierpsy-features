@@ -15,6 +15,12 @@ from tierpsy_features.path import get_path_extent_stats
 from tierpsy_features import timeseries_feats_columns, \
 ventral_signed_columns, path_curvature_columns, curvature_columns
 
+blob_feats_columns = [
+           'area', 'perimeter', 'box_length', 'box_width',
+           'quirkiness', 'compactness', 'solidity',
+           'hu0', 'hu1', 'hu2', 'hu3', 'hu4',
+           'hu5', 'hu6'
+           ]
 
 feats2normalize = {
     'L' : [
@@ -74,8 +80,7 @@ def _normalize_by_w_length(timeseries_data, feats2norm):
 
 def get_df_quantiles(df,
                      feats2check = timeseries_feats_columns,
-                     feats2subdivide = ['orientation_food_edge'],
-                     events2subdivide = ['food_region'],
+                     subdivision_dict = {'food_region':['orientation_food_edge']},
                      feats2norm = feats2normalize,
                      is_remove_subdivided = True,
                      is_abs_ventral = True,
@@ -90,22 +95,24 @@ def get_df_quantiles(df,
     
     #filter default columns in case they are not present
     feats2check = [x for x in feats2check if x in df]
-    feats2subdivide = [x for x in feats2check if x in feats2subdivide]
-    events2subdivide = [x for x in df if x in events2subdivide]
     
-    #subdivide a feature using the event features 
-    if feats2subdivide and events2subdivide:
-        subdivided_df = _get_subdivided_features(df, 
-                             timeseries_cols = feats2subdivide, 
-                             event_cols = events2subdivide)
-        df = df.join(subdivided_df)
-        feats2check += subdivided_df.columns.tolist()
-        
-        if is_remove_subdivided:
-            df = df[[x for x  in df if not x in feats2subdivide]]
-            feats2check = [x for x in feats2check if x not in feats2subdivide]
-        
-        
+    #filter default columns in case they are not present. Same for the subdivision dictionary.
+    subdivision_dict_r = {}
+    for e_subdivide, feats2subdivide in subdivision_dict.items():
+        ff = [x for x in feats2check if x in feats2subdivide]
+        if e_subdivide in df and ff:
+            subdivision_dict_r[e_subdivide] = ff
+    subdivision_dict = subdivision_dict_r
+    
+    #subdivide a feature using the event features
+    subdivided_df = _get_subdivided_features(df, subdivision_dict = subdivision_dict)
+    df = df.join(subdivided_df)
+    feats2check += subdivided_df.columns.tolist()
+    
+    if is_remove_subdivided:
+        df = df[[x for x  in df if not x in feats2subdivide]]
+        feats2check = [x for x in feats2check if x not in feats2subdivide]
+    
     if is_normalize:
         df, changed_feats = _normalize_by_w_length(df, feats2norm = feats2norm)
         feats2check = [x if not x in changed_feats else changed_feats[x] for x in feats2check]
@@ -145,8 +152,10 @@ def get_df_quantiles(df,
     return feat_mean_s
 
 
-def _get_subdivided_features(timeseries_data, timeseries_cols, event_cols):
+def _get_subdivided_features(timeseries_data, subdivision_dict):
     '''
+    subdivision_dict = {event_v1: [feature_v1, feature_v2, ...], event_v2: [feature_vn ...], ...}
+    
     event_vector = [-1, -1, 0, 0, 1, 1]
     feature_vector = [1, 3, 4, 5, 6, 6]
     
@@ -157,17 +166,16 @@ def _get_subdivided_features(timeseries_data, timeseries_cols, event_cols):
     
     '''
     
-    # I might need to input a more clever data for the subdivision like:
-    #    [(feat, [event1, event2]), (feat2, (event1)), (feat3, (event2))
+    #assert all the subdivision keys are known events
+    assert all(x in event_region_labels.keys() for x in subdivision_dict)
     
-    assert all(x in event_region_labels.keys() for x in event_cols)
     
     event_type_link = {
-            'food_region' : '_in_'
+            'food_region' : '_in_',
+            'motion_mode' : '_w_'
             }
-    
     subdivided_data = []
-    for e_col in event_cols:
+    for e_col, timeseries_cols in subdivision_dict.items():
         e_data = timeseries_data[e_col].values
         
         if e_col in event_type_link:
@@ -186,10 +194,16 @@ def _get_subdivided_features(timeseries_data, timeseries_cols, event_cols):
                 
                 subdivided_data.append((new_name, f_data))
     
+    
+    if not subdivided_data:
+        #return empty df if nothing was subdivided
+        return pd.DataFrame([])
+    
+
     columns, data = zip(*subdivided_data)
     subdivided_df = pd.DataFrame(np.array(data).T, columns = columns)
     subdivided_df.index = timeseries_data.index
-    
+
     return subdivided_df
     
 
@@ -336,23 +350,64 @@ def get_feat_stats_all(timeseries_data, blob_features, fps):
                      is_normalize = True)
     feat_stats_v_n = feat_stats_v_n[[x for x in feat_stats_v_n.index if x not in feat_stats_v.index]]
     
-    blob_feats = [
-           'area', 'perimeter', 'box_length', 'box_width',
-           'quirkiness', 'compactness', 'solidity',
-           'hu0', 'hu1', 'hu2', 'hu3', 'hu4',
-           'hu5', 'hu6'
-           ]
-    blob_stats = get_df_quantiles(blob_features, feats2check = blob_feats)
+    blob_stats = get_df_quantiles(blob_features, feats2check = blob_feats_columns)
     blob_stats.index = ['blob_' + x for x in blob_stats.index]
     
     exp_feats = pd.concat((feat_stats, feat_stats_n, blob_stats, feat_stats_v, feat_stats_v_n))
-    
+        
     return exp_feats
 
-if __name__ == '__main__':
-    fname = '/Volumes/behavgenom_archive$/Avelino/screening/Swiss_Strains/Results/Swiss_Strains_Set1_250817/TR2171_worms10_food1-10_Set3_Pos4_Ch3_25082017_145511_featuresN.hdf5'
+def get_feat_stats_test(timeseries_data, blob_features, fps):
+    # be careful the blob features has some repeated names like area...
     
+    
+    feat_stats = get_feat_stats(timeseries_data, fps, is_normalize = False)
+    
+    
+    #this is a dirty solution to avoid duplicates but we are testing right now
+    feat_stats_n = get_feat_stats(timeseries_data, fps, is_normalize = True)
+    feat_stats_n = feat_stats_n[[x for x in feat_stats_n.index if x not in feat_stats.index]]
+    
+    feat_stats_v = get_df_quantiles(timeseries_data, 
+                     feats2check = ventral_signed_columns, 
+                     is_abs_ventral = False, 
+                     is_normalize = False)
+    
+    
+    feat_stats_v_n = get_df_quantiles(timeseries_data, 
+                     feats2check = ventral_signed_columns, 
+                     is_abs_ventral = False, 
+                     is_normalize = True)
+    feat_stats_v_n = feat_stats_v_n[[x for x in feat_stats_v_n.index if x not in feat_stats_v.index]]
+    
+    blob_stats = get_df_quantiles(blob_features, feats2check = blob_feats_columns)
+    blob_stats.index = ['blob_' + x for x in blob_stats.index]
+    
+    
+    blob_features['motion_mode'] = timeseries_data['motion_mode']
+    blob_stats_m_subdiv = get_df_quantiles(blob_features, 
+                                      feats2check = blob_feats_columns, 
+                                      subdivision_dict = {'motion_mode':blob_feats_columns}, 
+                                      is_abs_ventral = False)
+    blob_stats_m_subdiv.index = ['blob_' + x for x in blob_stats_m_subdiv.index]
+    
+    feat_stats_m_subdiv = get_df_quantiles(timeseries_data, 
+                                      feats2check = timeseries_feats_columns, 
+                                      subdivision_dict = {'motion_mode':timeseries_feats_columns}, 
+                                      is_abs_ventral = False)
+    
+    
+    exp_feats = pd.concat((feat_stats, feat_stats_m_subdiv, feat_stats_n, blob_stats, blob_stats_m_subdiv, feat_stats_v, feat_stats_v_n))
+        
+    return exp_feats
+
+
+if __name__ == '__main__':
+    fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
     with pd.HDFStore(fname, 'r') as fid:
-        timeseries_features = fid['/timeseries_features']
+        timeseries_data = fid['/timeseries_data']
         blob_features = fid['/blob_features']
+    #%%
+    
+    feat_stats = get_feat_stats_test(timeseries_data, blob_features, 25)
     
