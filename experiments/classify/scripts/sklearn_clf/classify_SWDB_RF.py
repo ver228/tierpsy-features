@@ -22,8 +22,6 @@ from compare_ftests import col2ignore
 
 from tqdm import tqdm
 #%%
-
-
 if __name__ == '__main__':
     
     #save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/SWDB/'
@@ -31,6 +29,7 @@ if __name__ == '__main__':
     feat_files = {
             'OW' : 'F0.025_ow_features_old_SWDB.csv',
             'tierpsy' :'F0.025_tierpsy_features_SWDB.csv'
+            
             }
     
     

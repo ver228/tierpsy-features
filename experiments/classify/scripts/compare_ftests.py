@@ -43,7 +43,8 @@ def _get_args(set_type):
         feat_files = {
                 'OW_old' : 'ow_features_old_SWDB.csv',
                 #'OW' : 'ow_features_SWDB.csv',
-                'tierpsy' :'tierpsy_features_SWDB.csv'
+                'tierpsy' :'tierpsy_features_SWDB.csv',
+                'tierpsy_all' :'tierpsy_features_full_SWDB.csv'
                 }
     return MIN_N_VIDEOS, save_dir, feat_files
 
@@ -115,7 +116,7 @@ if __name__ == '__main__':
     for db_name, feats in all_features.items():
         all_features[db_name] = feats[feats['base_name'].isin(valid_ind)]
     #%%
-    n_batch= mp.cpu_count()
+    n_batch = min(12, mp.cpu_count())
     p = mp.Pool(n_batch)
     #%%
     

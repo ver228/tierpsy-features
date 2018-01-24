@@ -16,6 +16,7 @@ get_posture_features, posture_columns, posture_aux
 from tierpsy_features.curvatures import get_curvature_features, curvature_columns
 from tierpsy_features.food import get_cnt_feats, food_columns
 from tierpsy_features.path import get_path_curvatures, path_curvature_columns, path_curvature_columns_aux
+
 from tierpsy_features.events import get_events, event_columns
 
 timeseries_feats_columns = velocities_columns + morphology_columns + posture_columns + \
@@ -23,7 +24,7 @@ timeseries_feats_columns = velocities_columns + morphology_columns + posture_col
 
 aux_columns =  posture_aux + path_curvature_columns_aux
 
-timeseries_columns = timeseries_feats_columns + event_columns + aux_columns
+timeseries_all_columns = timeseries_feats_columns + event_columns + aux_columns
 
 ventral_signed_columns = [
         'angular_velocity',
@@ -42,8 +43,8 @@ ventral_signed_columns = [
         ] + path_curvature_columns + curvature_columns
 
 
-#all the ventral_signed_columns must be in timeseries_columns
-assert len(set(ventral_signed_columns) - set(timeseries_columns))  == 0 
+#all the ventral_signed_columns must be in timeseries_feats_columns
+assert len(set(ventral_signed_columns) - set(timeseries_feats_columns))  == 0 
 
 valid_ventral_side = ['','clockwise','anticlockwise', 'unknown']
 
@@ -101,8 +102,8 @@ def get_timeseries_features(skeletons,
     features_df = features_df.join(events_df[dd])
     
     #add any missing column
-    all_columns = ['timestamp'] + timeseries_columns
-    df = pd.DataFrame([], columns = timeseries_columns)
+    all_columns = ['timestamp'] + timeseries_all_columns
+    df = pd.DataFrame([], columns = timeseries_all_columns)
     features_df = pd.concat((df, features_df), ignore_index=True)
     features_df = features_df[all_columns]
     

@@ -19,13 +19,13 @@ from tierpsy_features.postures import get_length
 curvature_columns = ['curvature_head', 'curvature_hips', 'curvature_midbody',
        'curvature_neck', 'curvature_tail']
 
-def _h_curvature_angles(skeletons, window_length = None, lengths=None):
+def _curvature_angles(skeletons, window_length = None, lengths=None):
     if window_length is None:
         window_length = 7
 
     points_window = int(round(window_length/2))
     
-    def _h_tangent_angles(skels, points_window):
+    def _tangent_angles(skels, points_window):
         '''this is a vectorize version to calculate the angles between segments
         segment_size points from each side of a center point.
         '''
@@ -59,14 +59,14 @@ def _h_curvature_angles(skeletons, window_length = None, lengths=None):
     #This is the fraction of the length the angle is calculated on
     length_frac = 2*(points_window-1)/(n_segments-1)
     segment_length = length_frac*lengths
-    segment_angles = _h_tangent_angles(skeletons, points_window)
+    segment_angles = _tangent_angles(skeletons, points_window)
     
     curvature = segment_angles/segment_length[:, None]
     
     return curvature
 
 
-def _h_curvature_savgol(skeletons, window_length = None, length=None):
+def _curvature_savgol(skeletons, window_length = None, length=None):
     '''
     Calculate the curvature using univariate splines. This method is slower and can fail
     badly if the fit does not work, so I am only using it as testing
@@ -94,7 +94,7 @@ def _h_curvature_savgol(skeletons, window_length = None, length=None):
     return curvatures_fit
 
 
-def _h_curvature_spline(skeletons, points_window=None, length=None):
+def _curvature_spline(skeletons, points_window=None, length=None):
     '''
     Calculate the curvature using univariate splines. This method is slower and can fail
     badly if the fit does not work, so I am only using it as testing
@@ -157,7 +157,7 @@ def _gradient_windowed(X, points_window, axis):
     
     return grad
 
-def _h_curvature_grad(curve, points_window=None, axis=1, is_nan_border=True):
+def curvature_grad(curve, points_window=None, axis=1, is_nan_border=True):
     '''
     Calculate the curvature using the gradient using differences similar to numpy grad
     
@@ -200,10 +200,10 @@ def _h_curvature_grad(curve, points_window=None, axis=1, is_nan_border=True):
 
 def get_curvature_features(skeletons, method = 'grad', points_window=None):
     curvature_funcs = {
-            'angle' : _h_curvature_angles, 
-            'spline' : _h_curvature_spline, 
-            'savgol' : _h_curvature_savgol,
-            'grad' : _h_curvature_grad
+            'angle' : _curvature_angles, 
+            'spline' : _curvature_spline, 
+            'savgol' : _curvature_savgol,
+            'grad' : curvature_grad
             }
     
     
@@ -246,7 +246,7 @@ if __name__ == '__main__':
     
     ang = np.linspace(-np.pi, np.pi, 50)
     curve = np.array([np.cos(ang), np.sin(ang)]).T*R
-    curvature = _h_curvature_grad(curve, axis=0)
+    curvature = curvature_grad(curve, axis=0)
     
     plt.figure()
     plt.subplot(1,2,1)

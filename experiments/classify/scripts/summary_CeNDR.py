@@ -16,8 +16,6 @@ from tierpsy_features import ventral_signed_columns
 from functools import partial
 import multiprocessing as mp
 
-
-
 #the sign of this features is related with the ventral orientation. This is not defined in the multiworm case.
 _ow_signed_ventral_feats = ['head_bend_mean', 'neck_bend_mean', 
                 'midbody_bend_mean', 'hips_bend_mean', 
@@ -126,6 +124,7 @@ def read_ow_feats(experiments_df, FRAC_MIN=0.8):
     all_stats = list(p.map(row_fun, experiments_df.iterrows()))
     
     if False:
+        #debugging same but using loop instead of map (no parallelisation)
         all_stats = []
         for dd in experiments_df.iterrows():
             features_stats = _h_ow_process_row(dd)

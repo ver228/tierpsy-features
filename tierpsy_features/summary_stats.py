@@ -8,6 +8,7 @@ Created on Mon Oct  2 14:24:25 2017
 
 import pandas as pd
 import numpy as np
+import math
 
 from tierpsy_features.helper import get_n_worms_estimate
 from tierpsy_features.events import get_event_stats, event_region_labels
@@ -43,23 +44,22 @@ feats2normalize = {
     'L^2' : ['area']
 }
 
-def _h_get_conversion_vec(units_t, median_length_vec):
-    if units_t == 'L':
-        conversion_vec = 1/median_length_vec
-    elif units_t == '1/L':
-        conversion_vec = median_length_vec
-    elif units_t == 'L^2':
-        conversion_vec = median_length_vec**2
-    return conversion_vec
-    
-def _h_filter_ventral_features(feats2check):
-    valid_f = [x for x in feats2check if any(x.startswith(f) for f in ventral_signed_columns)]
-    return valid_f
 
 def _normalize_by_w_length(timeseries_data, feats2norm):
     '''
     Normalize features by body length. This is far from being the most efficient solution, but it is the easier to implement.
     '''
+    
+    def _get_conversion_vec(units_t, median_length_vec):
+        '''helper function to find how to make the conversion'''
+        if units_t == 'L':
+            conversion_vec = 1/median_length_vec
+        elif units_t == '1/L':
+            conversion_vec = median_length_vec
+        elif units_t == 'L^2':
+            conversion_vec = median_length_vec**2
+        return conversion_vec
+    
     timeseries_data = timeseries_data.copy()
     
     median_length = timeseries_data.groupby('worm_index').agg({'length':'median'})
@@ -68,7 +68,7 @@ def _normalize_by_w_length(timeseries_data, feats2norm):
     changed_feats_l = []
     for units_t, feats in feats2normalize.items():
         feats_f = [x for x in timeseries_data if any(x.startswith(f) for f in feats)]
-        conversion_vec = _h_get_conversion_vec(units_t, median_length_vec)
+        conversion_vec = _get_conversion_vec(units_t, median_length_vec)
         for f in feats_f:
             timeseries_data[f] *= conversion_vec
         changed_feats_l += feats_f
@@ -92,7 +92,10 @@ def get_df_quantiles(df,
     deal with worms with unknown dorsal/ventral orientation.
     '''
     
-    
+    def _filter_ventral_features(feats2check):
+        valid_f = [x for x in feats2check if any(x.startswith(f) for f in ventral_signed_columns)]
+        return valid_f
+
     #filter default columns in case they are not present
     feats2check = [x for x in feats2check if x in df]
     
@@ -124,8 +127,8 @@ def get_df_quantiles(df,
     
     feat_mean = None
     if is_abs_ventral:
+        feats2abs = _filter_ventral_features(feats2check)
         #find features that match ventral_signed_columns
-        feats2abs = _h_filter_ventral_features(feats2check)
         if feats2abs:
             Q = df[feats2abs].abs().quantile(valid_q)
             Q.columns = [x+'_abs' for x in Q.columns]
@@ -308,27 +311,6 @@ def collect_feat_stats(fnames, info_df, time_ranges_m = None, is_normalize = Fal
     feat_means_df = pd.concat(all_data, ignore_index=True)
     return feat_means_df
 
-def _old_events_from_df(features_timeseries, fps):
-    '''
-    Calculate the event features, and its durations from the features_timeseries table
-    '''
-    from tierpsy_features.events import get_events
-    
-    event_list = []
-    for worm_ind, worm_data in features_timeseries.groupby('worm_index'):
-        df, durations_df = get_events(worm_data, fps)
-        
-        df.index = worm_data.index
-        #insert worm index in the first position
-        durations_df.insert(0, 'worm_index', worm_ind)
-        event_list.append((df, durations_df))
-    
-    event_df, event_durations = zip(*event_list)
-    event_df = pd.concat(event_df)
-    
-    event_durations = pd.concat(event_durations, ignore_index=True)
-    return event_df, event_durations
-
 def get_feat_stats_all(timeseries_data, blob_features, fps):
     
     feat_stats = get_feat_stats(timeseries_data, fps, is_normalize = False)
@@ -356,8 +338,51 @@ def get_feat_stats_all(timeseries_data, blob_features, fps):
     exp_feats = pd.concat((feat_stats, feat_stats_n, blob_stats, feat_stats_v, feat_stats_v_n))
         
     return exp_feats
-
-def get_feat_stats_test(timeseries_data, blob_features, fps):
+#%%
+def _get_dev_stats(timeseries_data, blob_features, fps, delta_time = 1/3):
+    
+    delta_frames = int(round(fps*delta_time))
+    delta_time = delta_frames/fps
+    
+    e_cols = ['motion_mode']
+    ind_cols = ['worm_index', 'timestamp']
+    df = timeseries_data[ind_cols + e_cols + timeseries_feats_columns]
+    
+    df_b = blob_features[blob_feats_columns]
+    df_b.columns = ['blob_' + x for x in df_b.columns]
+    df = pd.concat((df, df_b), axis=1)
+    
+    dd = (ind_cols+e_cols)
+    v_cols = [x for x in df.columns if x not in dd]
+    
+    
+    all_vv = []
+    
+    m_o, m_f = math.floor(delta_frames/2), math.ceil(delta_frames/2)
+    for w_ind, w_dat in df.groupby('worm_index'):
+        if w_dat.shape[0] < delta_frames:
+            pass
+        vf = w_dat[v_cols].iloc[delta_frames:].reset_index(drop=True)
+        vo = w_dat[v_cols].iloc[:-delta_frames].reset_index(drop=True)
+        vv = (vf - vo)/delta_time
+        
+        mf = w_dat[e_cols].iloc[m_o:-m_f].reset_index(drop=True)
+        vv[e_cols] = mf
+        all_vv.append(vv)
+        
+    df_v = pd.concat(all_vv, ignore_index=True)
+    
+    feats_dev_stat = get_df_quantiles(df_v, 
+                                   feats2check = v_cols,
+                                   subdivision_dict = {'motion_mode':v_cols},
+                                   is_remove_subdivided = False,
+                                   is_abs_ventral = False)
+    feats_dev_stat.index = ['d_' + x for x in feats_dev_stat.index]
+    
+    
+    return feats_dev_stat 
+#%%
+def _test_get_feat_stats_all(timeseries_data, blob_features, fps):
     # be careful the blob features has some repeated names like area...
     
     
@@ -383,7 +408,6 @@ def get_feat_stats_test(timeseries_data, blob_features, fps):
     blob_stats = get_df_quantiles(blob_features, feats2check = blob_feats_columns)
     blob_stats.index = ['blob_' + x for x in blob_stats.index]
     
-    
     blob_features['motion_mode'] = timeseries_data['motion_mode']
     blob_stats_m_subdiv = get_df_quantiles(blob_features, 
                                       feats2check = blob_feats_columns, 
@@ -396,18 +420,26 @@ def get_feat_stats_test(timeseries_data, blob_features, fps):
                                       subdivision_dict = {'motion_mode':timeseries_feats_columns}, 
                                       is_abs_ventral = False)
     
+    feats_dev_stat = _get_dev_stats(timeseries_data, blob_features, fps)
     
-    exp_feats = pd.concat((feat_stats, feat_stats_m_subdiv, feat_stats_n, blob_stats, blob_stats_m_subdiv, feat_stats_v, feat_stats_v_n))
+    exp_feats = pd.concat((feat_stats, 
+                           feat_stats_m_subdiv, 
+                           feat_stats_n, blob_stats, 
+                           blob_stats_m_subdiv, 
+                           feat_stats_v, 
+                           feat_stats_v_n, 
+                           feats_dev_stat))
         
     return exp_feats
-
-
+#%%
 if __name__ == '__main__':
-    fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
+    from tierpsy.helper.params import read_fps
+    #fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
+    fname = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR/Results/CeNDR_Set1_020617/WN2002_worms10_food1-10_Set1_Pos4_Ch4_02062017_115723_featuresN.hdf5'
     with pd.HDFStore(fname, 'r') as fid:
         timeseries_data = fid['/timeseries_data']
         blob_features = fid['/blob_features']
+    fps = read_fps(fname)
     #%%
-    
-    feat_stats = get_feat_stats_test(timeseries_data, blob_features, 25)
+    feat_stats = _test_get_feat_stats_all(timeseries_data, blob_features, fps)
     

@@ -29,7 +29,7 @@ def _h_get_velocity(x, delta_frames, fps):
     delta_time = delta_frames/fps
     if x.shape[0] < delta_frames:
         #not enough frames return empty array
-        return np.full_like(v, np.nan)
+        return np.full_like(x, np.nan)
 
     v = (x[delta_frames:] - x[:-delta_frames])/delta_time
 

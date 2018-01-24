@@ -270,6 +270,9 @@ class SmoothedWorm():
 
 
 if __name__ == '__main__':
+    '''
+    Code for testing...
+    '''
     from tierpsy.analysis.feat_create.obtainFeaturesHelper import WormFromTable
     from tierpsy.analysis.feat_create.obtainFeatures import getGoodTrajIndexes
     from tierpsy.helper.misc import RESERVED_EXT
@@ -298,9 +301,9 @@ if __name__ == '__main__':
         os.makedirs(save_dir)
     
     
-    mask_video = '/Users/ajaver/OneDrive - Imperial College London/optogenetics/Arantza/MaskedVideos/control_pulse/pkd2_5min_Ch1_11052017_121414.hdf5'
-    save_prefix = 'worm_example.npz'
-    is_WT2 = False
+#    mask_video = '/Users/ajaver/OneDrive - Imperial College London/optogenetics/Arantza/MaskedVideos/control_pulse/pkd2_5min_Ch1_11052017_121414.hdf5'
+#    save_prefix = 'worm_example.npz'
+#    is_WT2 = False
     
 #    mask_video = '/Volumes/behavgenom_archive$/single_worm/finished/WT/N2/food_OP50/XX/30m_wait/clockwise/N2 on food L_2011_03_29__17_02_06___8___14.hdf5'
 #    save_prefix = 'worm_example_big_W{}.npz'
@@ -309,11 +312,18 @@ if __name__ == '__main__':
 #    mask_video = '/Volumes/behavgenom_archive$/single_worm/finished/WT/N2/food_OP50/XX/30m_wait/anticlockwise/N2 on food R_2009_09_04__10_59_59___8___5.hdf5'
 #    save_prefix = 'worm_example_small_W{}.npz'
 #    is_WT2 = True
+
+    mask_video = '/Volumes/behavgenom_archive$/Lidia/MaskedVideos/Optogenetics-day1/AQ3071-ATR_Set1_Ch1_18072017_191322.hdf5'
+    is_WT2 = False
     
-    #x.n_valid_skel/x.n_frames >= feat_filt_param['bad_seg_thresh']]
     skeletons_file = mask_video.replace('MaskedVideos','Results').replace('.hdf5', '_skeletons.hdf5')
+    #%%
+    import pandas as pd
+    with pd.HDFStore(skeletons_file, 'r') as fid:
+        trajectories_data = fid['/trajectories_data']
+    trajectories_data[trajectories_data['worm_index_joined'] == 2]
     
-    
+    #%%
     fps = read_fps(skeletons_file)
     coords_smooth_window = int(np.round(fps/3))
     if coords_smooth_window <= 3:
@@ -321,6 +331,7 @@ if __name__ == '__main__':
     
     good_traj_index, worm_index_type = getGoodTrajIndexes(skeletons_file)
     for iw, worm_index in enumerate(good_traj_index):
+        print(iw, len(good_traj_index))
         worm = WormFromTable(skeletons_file,
                             worm_index,
                             worm_index_type=worm_index_type
@@ -338,25 +349,25 @@ if __name__ == '__main__':
                 )
         
         
-        save_file = os.path.join(save_dir, save_prefix.format(worm_index))
-        np.savez_compressed(save_file, 
-                 skeleton=wormN.skeleton, 
-                 ventral_contour=wormN.ventral_contour, 
-                 dorsal_contour=wormN.dorsal_contour,
-                 widths = wormN.widths
-                 )
-            
-            
-        
-        break
-    #%%
-    import matplotlib.pyplot as plt
-    plt.figure()
-    plt.subplot(4,1,1)
-    plt.plot(wormN.skeleton[: ,0,0])
-    plt.subplot(4,1,2)
-    plt.plot(wormN.skeleton[: ,0,1])
-    plt.subplot(2,1,2)
-    plt.plot(wormN.skeleton[: ,0,0], wormN.skeleton[: ,0,1])
-    plt.axis('equal')
+#        save_file = os.path.join(save_dir, save_prefix.format(worm_index))
+#        np.savez_compressed(save_file, 
+#                 skeleton=wormN.skeleton, 
+#                 ventral_contour=wormN.ventral_contour, 
+#                 dorsal_contour=wormN.dorsal_contour,
+#                 widths = wormN.widths
+#                 )
+#            
+#            
+#        
+#        break
+#    #%%
+#    import matplotlib.pyplot as plt
+#    plt.figure()
+#    plt.subplot(4,1,1)
+#    plt.plot(wormN.skeleton[: ,0,0])
+#    plt.subplot(4,1,2)
+#    plt.plot(wormN.skeleton[: ,0,1])
+#    plt.subplot(2,1,2)
+#    plt.plot(wormN.skeleton[: ,0,0], wormN.skeleton[: ,0,1])
+#    plt.axis('equal')
     

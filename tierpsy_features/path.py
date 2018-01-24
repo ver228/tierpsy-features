@@ -10,7 +10,7 @@ import cv2
 import pandas as pd
 from scipy.interpolate import interp1d
 
-from tierpsy_features.curvatures import _h_curvature_grad
+from tierpsy_features.curvatures import curvature_grad
 from tierpsy_features.postures import get_length
 from tierpsy_features.helper import DataPartition, get_n_worms_estimate
 
@@ -100,7 +100,7 @@ def _h_path_curvature(skeletons,
     ts = ft(sub_lengths)
     
     curve = np.vstack((xs, ys)).T
-    curvature_r = _h_curvature_grad(curve, 
+    curvature_r = curvature_grad(curve, 
                                     points_window = path_grad_window, 
                                     axis=0,
                                     is_nan_border=False)
