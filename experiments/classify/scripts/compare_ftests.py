@@ -77,7 +77,10 @@ if __name__ == '__main__':
         col2remove =  dd.index[(dd>MAX_FRAC_NAN).values].tolist()
         feats = feats[[x for x in feats if x not in col2remove]]
         all_features[db_name] = feats
-    
+        
+        print(db_name)
+        print(col2remove)
+        
     assert (all_features['OW_old']['base_name'].values == all_features['tierpsy']['base_name'].values).all()
     
     #%%

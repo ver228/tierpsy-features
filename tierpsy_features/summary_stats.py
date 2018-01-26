@@ -385,7 +385,7 @@ def _get_dev_stats(timeseries_data, blob_features, fps, delta_time = 1/3):
 def _test_get_feat_stats_all(timeseries_data, blob_features, fps):
     # be careful the blob features has some repeated names like area...
     
-    
+    #%%
     feat_stats = get_feat_stats(timeseries_data, fps, is_normalize = False)
     
     
@@ -429,7 +429,7 @@ def _test_get_feat_stats_all(timeseries_data, blob_features, fps):
                            feat_stats_v, 
                            feat_stats_v_n, 
                            feats_dev_stat))
-        
+    #%%
     return exp_feats
 #%%
 if __name__ == '__main__':

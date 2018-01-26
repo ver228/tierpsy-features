@@ -11,8 +11,6 @@ Modified from:
 
 import numpy as np
 import pickle
-import os
-import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
 
 import multiprocessing as mp
@@ -21,7 +19,8 @@ import multiprocessing as mp
 #%%
 import torch
 from torch.autograd import Variable
-from helper import TrainerSimpleNet, SimpleNet, col2ignore
+from trainer import TrainerSimpleNet, SimpleNet
+from reader import read_feats, get_core_features, get_feat_group_indexes
 
 #%%    
 def softmax_RFE_g(data_in):
@@ -30,7 +29,7 @@ def softmax_RFE_g(data_in):
     
     (db_name, i_fold) = fold_id
     (x_train, y_train), (x_test, y_test), (feats_groups_inds, core_feats_dict) = fold_data
-    (cuda_id, n_epochs, batch_size, n_feats2remove) = fold_param
+    (cuda_id, n_epochs, batch_size) = fold_param
     
     
     n_classes = int(y_train.max() + 1)
@@ -109,117 +108,40 @@ def softmax_RFE_g(data_in):
             
             #add progress
             fold_res.append((group2remove, res))
-        #%%
+        
     return fold_id, fold_res
 
-#%%
-def remove_end(col_v, p2rev):
-    col_v_f = []
-    for x in col_v:
-        xf = x
-        for p in p2rev:
-            if x.endswith(p):
-                xf = xf[:-len(p)]
-                break
-        col_v_f.append(xf)
-    
-    return list(set(col_v_f))
-#%%
-def get_feat_group_indexes(core_feats_v, col_feats):
-    '''
-    Get the keys, i am assuming there is a core_feats for each of the col_feats
-    '''
-    
-    c_feats_dict = {x:ii for ii, x in enumerate(core_feats_v)}
-    
-    #sort features by length. In this way I give priority to the longer feat e.g area_length vs area 
-    core_feats_v = sorted(core_feats_v, key = len)[::-1]
-    
-    def _search_feat(feat):
-        for core_f in core_feats_v:
-            if feat.startswith(core_f):
-                return c_feats_dict[core_f]
-        print(feat)
-        raise('I should not be here... are you sure the keys match?')
-    
-    col_feats = [x[2:] if x.startswith('d_') else x for x in col_feats]
-    f_groups_inds = np.array([_search_feat(x) for x in col_feats])
-    
-    
-    return f_groups_inds, c_feats_dict
+
 
 #%%
 if __name__ == "__main__":
-    #save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/SWDB/'
-    save_dir = '../../data/SWDB'
-    feat_files = {
-            'tierpsy' : 'F0.025_tierpsy_features_full_SWDB.csv',
-            'OW' : 'F0.025_ow_features_old_SWDB.csv',
-            }
-    
+    feat_data, col2ignore_r = read_feats()
+    core_feats = get_core_features(feat_data, col2ignore_r)
     #%%
-    feat_data = {}
-    for db_name, bn in feat_files.items():
-        fname = os.path.join(save_dir, bn)
-        feats = pd.read_csv(fname)
-        
-        ss = np.sort(feats['strain'].unique())
-        s_dict = {s:ii for ii,s in enumerate(ss)}
-        feats['strain_id'] = feats['strain'].map(s_dict)
-        
-        #maybe i should divided it in train and test, but cross validation should be enough...
-        feats['set_type'] = ''
-        feat_data[db_name] = feats
-        
-    col2ignore_r = col2ignore + ['strain_id', 'set_type']
+    df = feat_data['tierpsy']
+    cols_no_hu = [x for x in df.columns if 'hu' not in x]
+    feat_data['tierpsy_no_hu'] = df[cols_no_hu]
+    core_feats['tierpsy_no_hu'] = [x for x in core_feats['tierpsy'] if 'hu' not in x]
     
-    #%% create a dataset with all the features
-    feats = feat_data['OW']
-    col_feats = [x for x in feats.columns if x not in col2ignore_r]
-    feats = feats[col_feats + ['base_name']]
-    feats.columns = [x if x == 'base_name' else 'ow_' + x for x in feats.columns]
-    feat_data['all'] = feat_data['tierpsy'].merge(feats, on='base_name')
     
-    #%% scale data
-    for db_name, feats in feat_data.items(): 
-        col_val = [x for x in feats.columns if x not in col2ignore_r]
-        dd = feats[col_val]
-        z = (dd-dd.mean())/(dd.std())
-        feats[col_val] = z
-        feat_data[db_name] = feats
+#    df = feat_data['all']
+#    cols_no_hu = [x for x in df.columns if 'hu' not in x]
+#    cols_no_hu_eigen = [x for x in cols_no_hu if 'eigen_projection' not in x]
+#    feat_data['all_no_hu'] = df[cols_no_hu]
+#    core_feats['all_no_hu'] = core_feats['all']
     
-    #%% obtain the core features from the feature list
-    core_feats = {}
-    
-    #OW
-    col_v = [x for x in feat_data['OW'].columns if x not in col2ignore_r]
-    col_v = remove_end(col_v, ['_abs', '_neg', '_pos'])
-    col_v = remove_end(col_v, ['_paused', '_forward', '_backward'])
-    col_v = remove_end(col_v, ['_distance', '_distance_ratio', '_frequency', '_time', '_time_ratio'])
-    core_feats['OW'] = sorted(col_v)
-    
-    #tierpsy
-    col_v = [x for x in feat_data['tierpsy'].columns if x not in col2ignore_r]
-    col_v = list(set([x[2:] if x.startswith('d_') else x for x in col_v]))
-    col_v = remove_end(col_v, ['_10th', '_50th', '_90th', '_95th', '_IQR'])
-    col_v = remove_end(col_v, ['_w_forward', '_w_backward']) #where is paused??
-    col_v = remove_end(col_v, ['_abs'])
-    col_v = remove_end(col_v, ['_norm'])
-    col_v = remove_end(col_v, ['_frequency', '_fraction', '_duration', ])
-    core_feats['tierpsy'] = sorted(col_v)
-    
-    #all
-    core_feats['all']  = core_feats['tierpsy'] + ['ow_' + x for x in core_feats['OW']]
+    del feat_data['OW']
+    del feat_data['all']
+    del feat_data['tierpsy']
     #%%
-    n_folds = 5
+    n_folds = 10
     batch_size = 250
     
-    n_epochs = 50
+    n_epochs = 250
     
     cuda_id = 1
-    n_feats2remove = 'log2' #1#
     
-    fold_param = (cuda_id, n_epochs, batch_size, n_feats2remove)
+    fold_param = (cuda_id, n_epochs, batch_size)
     
     all_data_in = []
     for db_name, feats in feat_data.items():
@@ -248,10 +170,10 @@ if __name__ == "__main__":
     #softmax_RFE_g(all_data_in[0])
     
     #%%
-    p = mp.Pool(15)
+    p = mp.Pool(10)
     results = p.map(softmax_RFE_g, all_data_in)
     
-    save_name = 'RFE_G_SoftMax.pkl'
+    save_name = 'RFE_G_SoftMax_noHu.pkl'
     with open(save_name, "wb" ) as fid:
         pickle.dump(results, fid)
     #%%
@@ -292,19 +214,18 @@ if __name__ == "__main__":
         xx = np.arange(tot, 0, -1)
         
         h = ax.errorbar(xx, yy, yerr=err, label = k)
-    #plt.xlim(0, 32)
+    #plt.xlim(0, 10)
     plt.legend()
     #%%
-    
+    from collections import Counter
     for k, dat in res_db.items():
-        #if k != 'OW': continue
+        #if k != 'tierpsy': continue
         
         plt.figure()
         
         dd = []
         for (feats, loss, acc, f1) in dat:
             dd.append(acc)
-        #tot = len(sum(feats, []))
         tot = len(feats)
         
         yy = np.mean(dd,axis=0)
@@ -312,11 +233,7 @@ if __name__ == "__main__":
         xx = np.arange(tot, 0, -1) + 1
         plt.errorbar(xx, yy, yerr=err)
         
-        
         ind = np.argmax(yy)
-        #x_max = xx[ind]
-        #plt.plot((x_max, x_max), plt.ylim())
-        
         
         th = yy[ind] - err[ind]
         min_ind = np.where(yy >= th)[0][-1]
@@ -331,9 +248,14 @@ if __name__ == "__main__":
     
         
         feats = [x[0] for x in dat]
-        #feats = [sum(x, []) for x in feats]
-        #%%
-        #col_feats = [x for x in feat_data[k].columns if x not in col2ignore_r]
-        #for ff in feats:
-        #    dd = list(set(col_feats) - set(ff))
-        #    ff.append(dd[0])
+        
+        useless_feats = sum([list(x[:min_ind]) for x in feats], [])
+        
+        usefull_feats = sum([list(x[min_ind:]) for x in feats], [])
+        
+        useless_feats = sorted(Counter(useless_feats).items(), key = lambda x : x[1])[::-1]
+        usefull_feats = sorted(Counter(usefull_feats).items(), key = lambda x : x[1])[::-1]
+    #%%
+    
+    
+    

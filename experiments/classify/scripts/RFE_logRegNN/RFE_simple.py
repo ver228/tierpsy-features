@@ -11,56 +11,15 @@ Modified from:
 
 import numpy as np
 import pickle
-import os
-import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
 
 import multiprocessing as mp
 
-
-from helper import softmax_RFE, col2ignore
+from trainer import softmax_RFE
+from reader import read_feats
 
 if __name__ == "__main__":
-    
-    #save_dir = '/Users/ajaver/OneDrive - Imperial College London/classify_strains/manual_features/SWDB/'
-    save_dir = '../../data/SWDB'
-    feat_files = {
-            #'tierpsy_full' : 'F0.025_tierpsy_features_full_SWDB.csv',
-            'OW' : 'F0.025_ow_features_old_SWDB.csv',
-            'tierpsy' :'F0.025_tierpsy_features_full_SWDB.csv',
-            #'OW_new' : 'F_ow_features_SWDB.csv',
-            }
-    #%%
-    feat_data = {}
-    for db_name, bn in feat_files.items():
-        fname = os.path.join(save_dir, bn)
-        feats = pd.read_csv(fname)
-        
-        ss = np.sort(feats['strain'].unique())
-        s_dict = {s:ii for ii,s in enumerate(ss)}
-        feats['strain_id'] = feats['strain'].map(s_dict)
-        
-        #maybe i should divided it in train and test, but cross validation should be enough...
-        feats['set_type'] = ''
-        feat_data[db_name] = feats
-        
-    col2ignore_r = col2ignore + ['strain_id', 'set_type']
-    #%% scale data
-    for db_name, feats in feat_data.items(): 
-        col_val = [x for x in feats.columns if x not in col2ignore_r]
-        
-        dd = feats[col_val]
-        z = (dd-dd.mean())/(dd.std())
-        feats[col_val] = z
-        feat_data[db_name] = feats
-        
-    
-    #%% create a dataset with all the features
-    feats = feat_data['OW']
-    col_feats = [x for x in feats.columns if x not in col2ignore_r]
-    feats = feats[col_feats + ['base_name']]
-    feat_data['all'] = feat_data['tierpsy'].merge(feats, on='base_name')
-    
+    feat_data, col2ignore_r = read_feats()
     #%%
     n_folds = 5
     batch_size = 250
@@ -132,6 +91,8 @@ if __name__ == "__main__":
     
     plt.figure()
     #%%
+    
+    
     fig, ax = plt.subplots(1, 1)
     for k, dat in res_db.items():
         
@@ -155,6 +116,10 @@ if __name__ == "__main__":
         h = ax.errorbar(xx, yy, yerr=err, label = k)
     #plt.xlim(0, 32)
     plt.legend()
+    plt.xlabel('Number of Features')
+    plt.ylabel('Accuracy')
+    
+    fig.savefig('RFE_comparison.pdf')
     
     #%%
     
