@@ -14,3 +14,11 @@ experiments/celine_ageing/*.png
 
 
 experiments/classify/data/**
+
+experiments/celine_ageing/scripts/int_avg_maps/*
+
+experiments/celine_ageing/scripts/int_summary/
+
+experiments/celine_ageing/scripts/ageing_celine_feats\.csv
+
+experiments/celine_ageing/scripts/ageing_celine\.csv

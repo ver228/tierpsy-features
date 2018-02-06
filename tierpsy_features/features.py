@@ -49,16 +49,25 @@ assert len(set(ventral_signed_columns) - set(timeseries_feats_columns))  == 0
 valid_ventral_side = ['','clockwise','anticlockwise', 'unknown']
 
 def get_timeseries_features(skeletons, 
-                            widths, 
-                            dorsal_contours, 
-                            ventral_contours,
-                            fps,
+                            widths = None, 
+                            dorsal_contours = None, 
+                            ventral_contours = None,
+                            fps = 1,
                             ventral_side = '',
                             timestamp = None,
                             food_cnt = None,
                             is_smooth_cnt = False,
                             delta_time = 1/3, #delta time in seconds to calculate the velocity
                             ):
+    
+    '''
+    skeletons -> n_frames x n_segments x 2
+    widths -> n_frames x n_segments
+    dorsal_contours -> n_frames x n_segments x 2
+    ventral_contours -> n_frames x n_segments x 2
+    
+    
+    '''
     
     assert ventral_side in valid_ventral_side
 
