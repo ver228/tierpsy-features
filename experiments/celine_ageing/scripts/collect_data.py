@@ -10,6 +10,8 @@ import glob
 import re
 import pandas as pd
 
+replace_worm_id= {'6bis':999, '51bis':998} #set dummy worm_id values for this two sets
+
 def get_file_parts(fnames):
     all_data = []
     for feat_file in fnames:
@@ -18,8 +20,13 @@ def get_file_parts(fnames):
         parts = os.path.basename(bn).split('_')
         
         Rn = int(parts[1].split('#')[-1])
-        strain, worm_id = parts[2].split('#')
-        worm_id = int(worm_id)
+        strain, w_id = parts[2].split('#')
+        w_id = int(w_id)
+        
+        if parts[0] in replace_worm_id:
+            w_id = replace_worm_id[parts[0]]
+        
+        
         
         if 'L4' in parts[3].upper():
             day = 0
@@ -29,12 +36,16 @@ def get_file_parts(fnames):
         
         ts = pd.Timestamp(*[int(x) for x in parts[5:12] if x])
         
-        dd = (fdir, bn, Rn, strain.upper(), worm_id, day, v_orientation, ts)
+        dd = (fdir, bn, Rn, strain.upper(), w_id, day, v_orientation, ts)
         all_data.append(dd)
         
-    df = pd.DataFrame(all_data, columns=['directory', 'base_name', 'replicated_n', 'strain', 'worm_id', 'day', 'ventral_orientation', 'timestamp'])
-    df = df.sort_values(['strain', 'replicated_n', 'worm_id', 'day']).reset_index(drop=True)
+    df = pd.DataFrame(all_data, columns=['directory', 'base_name', 'replicated_n', 'strain', 'w_id', 'day', 'ventral_orientation', 'timestamp'])
+    df = df.sort_values(['strain', 'replicated_n', 'w_id', 'day']).reset_index(drop=True)
     
+    df['worm_id'] = -1
+    for worm_id, (d_id, dat) in enumerate(df.groupby(('strain', 'replicated_n', 'w_id'))):
+        df.loc[dat.index,'worm_id'] = worm_id
+        
     df['id'] = df.index
     return df
 

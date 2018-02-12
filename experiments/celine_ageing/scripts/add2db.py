@@ -9,8 +9,9 @@ import pandas as pd
 import pytz
 from collections import OrderedDict
 
-experimenter_dflt = 'Celine N. Martineau'
-lab_dflt = {'name' : '',  'location':''}
+experimenter_dflt = 'Céline N. Martineau, Bora Baskaner'
+lab_dflt = {'name' : 'European Research Institute for the Biology of Ageing',  
+            'location':'The Netherlands'}
 timezone_dflt = 'Europe/Amsterdam'
 media_dflt = "NGM agar low peptone"
 food_dflt = "OP50"
@@ -37,9 +38,6 @@ def db_row2dict(row):
     experiment_info['food'] = food_dflt
     
     experiment_info['strain'] = row['strain']
-    experiment_info['gene'] = row['gene']
-    experiment_info['allele'] = row['allele']
-    experiment_info['chromosome'] = row['chromosome']
     experiment_info['strain_description'] = row['strain_description']
     
     
@@ -65,10 +63,27 @@ def db_row2dict(row):
     experiment_info['original_video_name'] = row['original_video']
     
     return experiment_info
+
+
+
+strains_data = [
+    ('OW939', 'zgIs113[P(dat-1)::alpha-Synuclein::YFP]', 1, 1, 1),
+    ('OW940', 'zgIs128[P(dat-1)::alpha-Synuclein::YFP]', 1, 1, 1),
+    ('OW949', 'zgIs125[P(dat-1)::alpha-Synuclein::YFP]', 1, 1, 1),
+    ('OW953', 'zgIs138[P(dat-1)::YFP]', 1, 1, 1),
+    ('OW956', 'zgIs144[P(dat-1)::YFP]', 1, 1, 1)
+    ]
+    
 if __name__ == '__main__':
     exp_file = 'ageing_celine.csv'
     experiments_df = pd.read_csv(exp_file)
     
+    #use the strain code from the CGC
+    experiments_df['strain'] = experiments_df['strain'].replace({'N2' : 'AQ2947'})
+    experiments_df = experiments_df.rename(columns={"ventral_orientation": "ventral_side"})
+    
+    
+    experiments_df['ventral_side'] = experiments_df['ventral_side'].replace({'CW':'clockwise', 'CCW':'anticlockwise'})
     
     u_strain = experiments_df['strain'].unique()
     u_day = experiments_df['day'].unique()
@@ -76,7 +91,8 @@ if __name__ == '__main__':
     for _, row in experiments_df.iterrows():
         
         row_d = row.to_dict()
-        
+        del row_d['id']
+        del row_d['replicated_n']
         break
     
     
