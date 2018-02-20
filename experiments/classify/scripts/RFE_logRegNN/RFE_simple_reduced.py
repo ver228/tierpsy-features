@@ -20,32 +20,6 @@ import multiprocessing as mp
 from trainer import softmax_RFE
 from reader import read_feats, get_core_features, get_feat_group_indexes
 
-feats2remove = ['blob_area',
- 'blob_box_width',
- 'blob_perimeter',
- 'path_coverage_body',
- 'path_coverage_head',
- 'path_coverage_midbody',
- 'path_coverage_tail',
- 'path_curvature_body',
- 'path_curvature_head',
- 'path_curvature_midbody',
- 'path_curvature_tail',
- 'path_density_body',
- 'path_density_head',
- 'path_density_midbody',
- 'path_density_tail',
- 'path_transit_time_body',
- 'path_transit_time_head',
- 'path_transit_time_midbody',
- 'path_transit_time_tail',
- 'turn_inter',
- 'turn_intra'
- ]
-
-
-
-
 
 if __name__ == "__main__":
     feat_data, col2ignore_r = read_feats()
@@ -57,7 +31,6 @@ if __name__ == "__main__":
     v_cols = [x for x in v_cols if not '_w_' in x]
     v_cols = [x for x in v_cols if not 'blob_' in x]
     v_cols = [x for x in v_cols if not '_base' in x]
-    #v_cols = [x for x in v_cols if not any(f in x for f in feats2remove)]
     
     feat_data['tierpsy_reduced'] = df[v_cols]
     #%%
