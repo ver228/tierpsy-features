@@ -40,6 +40,7 @@ def nanunwrap(x):
     '''
     bad = np.isnan(x)
     x = fillfnan(x)
+    x = fillbnan(x)
     x = np.unwrap(x)
     x[bad] = np.nan
     return x

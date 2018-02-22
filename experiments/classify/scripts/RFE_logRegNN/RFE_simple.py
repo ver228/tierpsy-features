@@ -21,15 +21,18 @@ from reader import read_feats
 if __name__ == "__main__":
     feat_data, col2ignore_r = read_feats()
     #%%
-    n_folds = 5
+    n_folds = 10
     batch_size = 250
     
     n_epochs = 250
     metric2exclude = 'loss'
     
-    cuda_id = 0
-    n_feats2remove = 'log2' #1#
+    #cuda_id = 0
+    #n_feats2remove = 'log2' #1#
     
+    cuda_id = 1
+    n_feats2remove = 1
+    #%%
     fold_param = (cuda_id, n_epochs, batch_size, metric2exclude, n_feats2remove)
     
     all_data_in = []

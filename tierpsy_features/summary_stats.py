@@ -66,7 +66,7 @@ def _normalize_by_w_length(timeseries_data, feats2norm):
     median_length_vec = timeseries_data['worm_index'].map(median_length['length'])
     
     changed_feats_l = []
-    for units_t, feats in feats2normalize.items():
+    for units_t, feats in feats2norm.items():
         feats_f = [x for x in timeseries_data if any(x.startswith(f) for f in feats)]
         conversion_vec = _get_conversion_vec(units_t, median_length_vec)
         for f in feats_f:
@@ -82,6 +82,7 @@ def get_df_quantiles(df,
                      feats2check = timeseries_feats_columns,
                      subdivision_dict = {'food_region':['orientation_food_edge']},
                      feats2norm = feats2normalize,
+                     feats2abs = ventral_signed_columns,
                      is_remove_subdivided = True,
                      is_abs_ventral = True,
                      is_normalize = False
@@ -93,7 +94,7 @@ def get_df_quantiles(df,
     '''
     
     def _filter_ventral_features(feats2check):
-        valid_f = [x for x in feats2check if any(x.startswith(f) for f in ventral_signed_columns)]
+        valid_f = [x for x in feats2check if any(x.startswith(f) for f in feats2abs)]
         return valid_f
 
     #filter default columns in case they are not present

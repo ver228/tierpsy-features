@@ -53,11 +53,11 @@ def get_timeseries_features(skeletons,
                             dorsal_contours = None, 
                             ventral_contours = None,
                             fps = 1,
+                            derivate_delta_time = 1/3, 
                             ventral_side = '',
                             timestamp = None,
                             food_cnt = None,
-                            is_smooth_cnt = False,
-                            delta_time = 1/3, #delta time in seconds to calculate the velocity
+                            is_smooth_food_cnt = False,
                             ):
     
     '''
@@ -65,7 +65,7 @@ def get_timeseries_features(skeletons,
     widths -> n_frames x n_segments
     dorsal_contours -> n_frames x n_segments x 2
     ventral_contours -> n_frames x n_segments x 2
-    
+    derivate_delta_time -> delta time in seconds used to calculate derivatives (including velocity)
     
     '''
     
@@ -82,14 +82,14 @@ def get_timeseries_features(skeletons,
     curvatures = get_curvature_features(skeletons)
     features_df = features_df.join(curvatures)
     
-    velocities = get_velocity_features(skeletons, delta_time, fps)
+    velocities = get_velocity_features(skeletons, derivate_delta_time, fps)
     if velocities is not None:
         features_df = features_df.join(velocities)
     
     if food_cnt is not None:
         food = get_cnt_feats(skeletons, 
                              food_cnt,
-                             is_smooth_cnt
+                             is_smooth_food_cnt
                              )
         features_df = features_df.join(food)
     

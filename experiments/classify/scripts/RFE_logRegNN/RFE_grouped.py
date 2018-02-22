@@ -115,26 +115,40 @@ def softmax_RFE_g(data_in):
 
 #%%
 if __name__ == "__main__":
+    
+    
+    
     feat_data, col2ignore_r = read_feats()
     core_feats = get_core_features(feat_data, col2ignore_r)
+    
+    
+    if True:
+        save_name = 'RFE_G_SoftMax_R.pkl'
+        df = feat_data['tierpsy']
+        cols_no_blob = [x for x in df.columns if 'blob' not in x]
+        feat_data['tierpsy_no_blobs'] = df[cols_no_blob]
+        core_feats['tierpsy_no_blobs'] = [x for x in core_feats['tierpsy'] if 'blob' not in x]
+        
+        
+        cols_no_blob_no_eigen = [x for x in cols_no_blob if 'eigen' not in x]
+        feat_data['tierpsy_no_blob_no_eigen'] = df[cols_no_blob_no_eigen]
+        core_feats['tierpsy_no_blob_no_eigen'] = [x for x in core_feats['tierpsy_no_blobs'] if 'eigen' not in x]
+        
+    
+    
+        #save_name = 'RFE_G_SoftMax_OW2add.pkl'
+        #feat_data_r =  {}
+        #core_feats_r = {}
+        
+        # i will only remove the features of OW in the hope of finding the ones that are still usefull
+        feat_data['all_ow'] = feat_data['all']
+        
+        dd = ['ow_' + x for x in core_feats['OW']]
+        dd = [x for x in dd if x in core_feats['all']]
+        core_feats['all_ow'] = dd
+        
     #%%
-    df = feat_data['tierpsy']
-    cols_no_hu = [x for x in df.columns if 'hu' not in x]
-    feat_data['tierpsy_no_hu'] = df[cols_no_hu]
-    core_feats['tierpsy_no_hu'] = [x for x in core_feats['tierpsy'] if 'hu' not in x]
-    
-    
-#    df = feat_data['all']
-#    cols_no_hu = [x for x in df.columns if 'hu' not in x]
-#    cols_no_hu_eigen = [x for x in cols_no_hu if 'eigen_projection' not in x]
-#    feat_data['all_no_hu'] = df[cols_no_hu]
-#    core_feats['all_no_hu'] = core_feats['all']
-    
-    del feat_data['OW']
-    del feat_data['all']
-    del feat_data['tierpsy']
-    #%%
-    n_folds = 10
+    n_folds = 7
     batch_size = 250
     
     n_epochs = 250
@@ -166,14 +180,14 @@ if __name__ == "__main__":
             
             all_data_in.append((fold_id, fold_data, fold_param))
         
-        
+    
     #softmax_RFE_g(all_data_in[0])
     
     #%%
     p = mp.Pool(10)
     results = p.map(softmax_RFE_g, all_data_in)
     
-    save_name = 'RFE_G_SoftMax_noHu.pkl'
+    
     with open(save_name, "wb" ) as fid:
         pickle.dump(results, fid)
     #%%

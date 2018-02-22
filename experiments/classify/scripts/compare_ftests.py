@@ -34,17 +34,15 @@ def _get_args(set_type):
         MIN_N_VIDEOS = 3
         save_dir = os.path.join(MAIN_DIR, 'CeNDR/')
         feat_files = {
-                'OW' : 'ow_features_CeNDR.csv',
-                'tierpsy' :'tierpsy_features_CeNDR.csv'
+                'OW' : 'ow_features_full_CeNDR.csv',
+                'tierpsy' :'tierpsy_features_full_CeNDR.csv'
                 }
     elif set_type == 'SWDB':
         MIN_N_VIDEOS = 10
         save_dir = os.path.join(MAIN_DIR, 'SWDB/')
         feat_files = {
-                'OW_old' : 'ow_features_old_SWDB.csv',
-                #'OW' : 'ow_features_SWDB.csv',
-                'tierpsy' :'tierpsy_features_SWDB.csv',
-                'tierpsy_all' :'tierpsy_features_full_SWDB.csv'
+                'OW' : 'ow_features_full_SWDB.csv',
+                'tierpsy' : 'tierpsy_features_full_SWDB.csv'
                 }
     return MIN_N_VIDEOS, save_dir, feat_files
 
@@ -63,10 +61,11 @@ def _h_ftest(columns, feats_g):
     return all_f
 #%%
 if __name__ == '__main__':
-    MAX_FRAC_NAN = 0.025#0.25
+    #MAX_FRAC_NAN = 0.025
+    MAX_FRAC_NAN = 0.05
     
-    
-    MIN_N_VIDEOS, save_dir, feat_files = _get_args('SWDB')
+    #MIN_N_VIDEOS, save_dir, feat_files = _get_args('SWDB')
+    MIN_N_VIDEOS, save_dir, feat_files = _get_args('CeNDR')
     
     all_features = {}
     for db_name, feat_file in feat_files.items():
@@ -81,10 +80,10 @@ if __name__ == '__main__':
         print(db_name)
         print(col2remove)
         
-    assert (all_features['OW_old']['base_name'].values == all_features['tierpsy']['base_name'].values).all()
+    assert (all_features['OW']['base_name'].values == all_features['tierpsy']['base_name'].values).all()
     
     #%%
-    dd = all_features['OW_old']['strain'].value_counts()
+    dd = all_features['OW']['strain'].value_counts()
     good_strains = dd.index[(dd>=MIN_N_VIDEOS).values].values
     
     for db_name, feats in all_features.items():
@@ -122,11 +121,7 @@ if __name__ == '__main__':
     n_batch = min(12, mp.cpu_count())
     p = mp.Pool(n_batch)
     #%%
-    
     #all_stats = list(p.map(row_fun, experiments_df.iterrows()))
-    
-    
-    
     fstats_comparsions = {}
     for db_name, feats in all_features.items():
         print(db_name)

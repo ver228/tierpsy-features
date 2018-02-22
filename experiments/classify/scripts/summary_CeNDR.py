@@ -156,7 +156,9 @@ def read_tierpsy_feats(experiments_df):
     return feat_df
 
 def ini_experiments_df():
-    sys.path.append('/Users/ajaver/Documents/GitHub/process-rig-data/process_files')
+    #sys.path.append('/Users/ajaver/Documents/GitHub/process-rig-data/process_files')
+    d_path = os.path.join(os.environ['HOME'], 'Github/process-rig-data/process_files')
+    sys.path.append(d_path)
     from misc import get_rig_experiments_df
 
     exp_set_dir = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR'
@@ -183,13 +185,14 @@ if __name__ == '__main__':
     experiments_df = experiments_df[['id', 'strain', 'directory', 'base_name', 'exp_name']]
     experiments_df.index = experiments_df['id']
     
-    tierpsy_feats = read_tierpsy_feats(experiments_df)
-    dd = experiments_df.join(tierpsy_feats)
-    save_name = os.path.join(save_dir, 'tierpsy_features_CeNDR.csv')
-    dd.to_csv(save_name)
+#    tierpsy_feats = read_tierpsy_feats(experiments_df)
+#    dd = experiments_df.join(tierpsy_feats)
+#    save_name = os.path.join(save_dir, 'tierpsy_features_CeNDR.csv')
+#    dd.to_csv(save_name)
+#    
+#    ow_feats = read_ow_feats(experiments_df)
+#    dd = experiments_df.join(ow_feats)
+#    save_name = os.path.join(save_dir, 'ow_features_CeNDR.csv')
+#    dd.to_csv(save_name)
     
-    ow_feats = read_ow_feats(experiments_df)
-    dd = experiments_df.join(ow_feats)
-    save_name = os.path.join(save_dir, 'ow_features_CeNDR.csv')
-    dd.to_csv(save_name)
-    
+   

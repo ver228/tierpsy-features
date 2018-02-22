@@ -6,7 +6,6 @@ This module defines the NormalizedWorm class
 import numpy as np
 import pandas as pd
 from collections import OrderedDict
-from scipy.interpolate import interp1d
 
 import matplotlib.pylab as plt
 from matplotlib import animation, patches
@@ -63,7 +62,7 @@ def _h_center_skeleton(skeletons, orientation, coords):
 
 def _h_segment_position(skeletons, partition):
     p_obj = DataPartition([partition], n_segments=skeletons.shape[1])
-    coords = p_obj.apply(skeletons, partition, func=np.mean)
+    coords = p_obj.apply(skeletons, partition, func=np.nanmean)
     orientation_v = p_obj.apply(skeletons, partition, func=_h_orientation_vector)
     return coords, orientation_v
 
@@ -106,6 +105,7 @@ def _h_relative_velocity(segment_coords, delta_frames, fps):
     
     r_radial_velocity = _h_get_velocity(r, delta_frames, fps)
     r_angular_velocity = _h_get_velocity(theta, delta_frames, fps)
+    
     return r_radial_velocity, r_angular_velocity
 
 
@@ -117,8 +117,11 @@ def get_relative_velocities(centered_skeleton, partitions, delta_frames, fps):
     r_radial_velocities = {}
     r_angular_velocities = {}
     
+    
     for p in partitions:
-        segment_coords = p_obj.apply(centered_skeleton, p, func=np.mean)
+        
+    
+        segment_coords = p_obj.apply(centered_skeleton, p, func=np.nanmean)
         r_radial_velocity, r_angular_velocity = _h_relative_velocity(segment_coords, delta_frames, fps)
         r_radial_velocities[p] = r_radial_velocity
         r_angular_velocities[p] = r_angular_velocity
@@ -130,7 +133,7 @@ def get_relative_velocities(centered_skeleton, partitions, delta_frames, fps):
 
 def get_relative_speed_midbody(centered_skeleton, partitions, delta_frames, fps):
     p_obj = DataPartition(['midbody'], n_segments=centered_skeleton.shape[1])
-    segment_coords = p_obj.apply(centered_skeleton, 'midbody', func=np.mean)
+    segment_coords = p_obj.apply(centered_skeleton, 'midbody', func=np.nanmean)
     return _h_get_velocity(segment_coords[:, 0], delta_frames, fps)
 
 #%%

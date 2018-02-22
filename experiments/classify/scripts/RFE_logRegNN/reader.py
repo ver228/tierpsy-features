@@ -26,7 +26,7 @@ def read_feats():
     save_dir = '../../data/SWDB'
     feat_files = {
             'tierpsy' : 'F0.025_tierpsy_features_full_SWDB.csv',
-            'OW' : 'F0.025_ow_features_old_SWDB.csv',
+            'OW' : 'F0.025_ow_features_full_SWDB.csv',
             }
     
     feat_data = {}
@@ -115,8 +115,9 @@ def get_feat_group_indexes(core_feats_v, col_feats):
         for core_f in core_feats_v:
             if feat.startswith(core_f):
                 return c_feats_dict[core_f]
-        print(feat)
-        raise('I should not be here... are you sure the keys match?')
+        #the correct index was not found return -1
+        return -1 
+        
     
     col_feats = [x[2:] if x.startswith('d_') else x for x in col_feats]
     f_groups_inds = np.array([_search_feat(x) for x in col_feats])

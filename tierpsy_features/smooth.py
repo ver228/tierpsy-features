@@ -150,11 +150,18 @@ class SmoothedWorm():
         
         
     def _h_fix_smooth(self, smooth_window):
-        if smooth_window is not None and smooth_window % 2 == 0:
+        if smooth_window is None:
+            return smooth_window
+        
+        if smooth_window <= self.pol_degree:
+            #if the smoot window is too small do not smooth
+            return None
+        
+        if smooth_window % 2 == 0:
             smooth_window += 1
-        assert smooth_window is None or smooth_window > self.pol_degree
+        
         return smooth_window
-    
+        
     
     def _h_resample_coords(self, A, W = None):
         #I am adding the W as width, in the case of skeletons, 
