@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pylab as plt
 import pandas as pd
 if __name__ == '__main__':
-    save_name = 'RFE_G_SoftMax.pkl'
+    save_name = 'RFE_G_SoftMax_R.pkl'
    
     #%%
     with open(save_name, "rb" ) as fid:
@@ -27,19 +27,49 @@ if __name__ == '__main__':
         
         res_db[db_name].append((feats, loss, acc, f1))
     #%%
-    feats_div = {}
-    for db_name, fold_data in res_db.items():
+    for set_type, dat in res_db.items():
+        res_db[set_type] = list(zip(*dat))
+    #%%
+    for n, m_type in enumerate(['loss', 'acc', 'f1']):
+        print(m_type)
+        for set_type, dat in res_db.items():
+            vv = dat[n + 1]
+            best_vv = np.max(vv, axis=1)
+            dd = 'Best {} : {:.2f} {:.2f}'.format(set_type, np.mean(best_vv), np.std(best_vv))
+            print(dd)
+        
+    #%%
+    plt.figure()
+    for db_name, dat in res_db.items():
         #if k != 'tierpsy': continue
+        
+        acc = dat[2]
+        feats = dat[0]
+        
+        
+        
+        tot = len(feats[0])
+        
+        yy = np.mean(acc,axis=0)
+        err = np.std(acc,axis=0)
+        xx = np.arange(tot, 0, -1) + 1
+        plt.errorbar(xx, yy, yerr=err)
+        
+        
+    #%%
+    feats_div = {}
+    for db_name, dat in res_db.items():
+        #if k != 'tierpsy': continue
+        
+        acc = dat[2]
+        feats = dat[0]
         
         plt.figure()
         
-        dd = []
-        for (feats, loss, acc, f1) in fold_data:
-            dd.append(acc)
-        tot = len(feats)
+        tot = len(feats[0])
         
-        yy = np.mean(dd,axis=0)
-        err = np.std(dd,axis=0)
+        yy = np.mean(acc,axis=0)
+        err = np.std(acc,axis=0)
         xx = np.arange(tot, 0, -1) + 1
         plt.errorbar(xx, yy, yerr=err)
         
@@ -59,12 +89,13 @@ if __name__ == '__main__':
         
         feat_orders = {}
         
-        for dat in fold_data:
-            for ii, f in enumerate(dat[0]):
-                if not f in feat_orders:
-                    feat_orders[f] = []
-                feat_orders[f].append(ii)
-        
+        for feats_in_fold in feats:
+            for ii, feat in enumerate(feats_in_fold):
+                if not feat in feat_orders:
+                    feat_orders[feat] = []
+                feat_orders[feat].append(ii)
+            
+            
         feats, order_vals = zip(*feat_orders.items())
         df = pd.DataFrame(np.array(order_vals), index=feats)
         df_m = df.median(axis=1).sort_values()
@@ -74,17 +105,12 @@ if __name__ == '__main__':
         useless_feats = df_m.index[:min_ind]
         usefull_feats = df_m.index[min_ind:]
         feats_div[db_name] = (useless_feats, usefull_feats)
-        #useless_feats = sum([list(x[:min_ind]) for x in feats], [])
-        #usefull_feats = sum([list(x[min_ind:]) for x in feats], [])
-        #useless_feats = sorted(Counter(useless_feats).items(), key = lambda x : x[1])[::-1]
-        #usefull_feats = sorted(Counter(usefull_feats).items(), key = lambda x : x[1])[::-1]
-    #%%
-    useless_feats, usefull_feats = feats_div['tierpsy']
     
+    useless_feats, usefull_feats = feats_div['tierpsy_no_blob_no_eigen']
     
-    ff_str = 'turn'
-    dd = [(ii,x) for ii,x in enumerate(useless_feats) if ff_str in x]
-    print('BAD *****', dd)
-    
-    dd = [(ii,x) for ii,x in enumerate(usefull_feats) if ff_str in x]
-    print('GOOD ****', dd)
+#    ff_str = 'turn'
+#    dd = [(ii,x) for ii,x in enumerate(useless_feats) if ff_str in x]
+#    print('BAD *****', dd)
+#    
+#    dd = [(ii,x) for ii,x in enumerate(usefull_feats) if ff_str in x]
+#    print('GOOD ****', dd)

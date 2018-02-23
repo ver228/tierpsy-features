@@ -134,12 +134,6 @@ if __name__ == "__main__":
         feat_data['tierpsy_no_blob_no_eigen'] = df[cols_no_blob_no_eigen]
         core_feats['tierpsy_no_blob_no_eigen'] = [x for x in core_feats['tierpsy_no_blobs'] if 'eigen' not in x]
         
-    
-    
-        #save_name = 'RFE_G_SoftMax_OW2add.pkl'
-        #feat_data_r =  {}
-        #core_feats_r = {}
-        
         # i will only remove the features of OW in the hope of finding the ones that are still usefull
         feat_data['all_ow'] = feat_data['all']
         
@@ -148,7 +142,7 @@ if __name__ == "__main__":
         core_feats['all_ow'] = dd
         
     #%%
-    n_folds = 7
+    n_folds = 10
     batch_size = 250
     
     n_epochs = 250

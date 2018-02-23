@@ -13,8 +13,8 @@ import pandas as pd
 import os
 import multiprocessing as mp
 
-from summary_helper import process_feat_tierpsy_file
-from summary_helper_ow import process_ow_file
+from helper_collect_tierspy import process_feat_tierpsy_file
+from helper_collect_ow import process_ow_file
 
 def _tierpsy_process_row(data_in):
     irow, row = data_in
