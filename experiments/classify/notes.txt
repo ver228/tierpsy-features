@@ -1,5 +1,0 @@
-
-- try SVM = DONE Slow. Logistic Regression with multi_class='ovr' seems to work better but it is VERY slow. ovr = one vs the rest.
-- Lidia's data!
-- interpretability feature selection
-- clusters of confusion matrixes
