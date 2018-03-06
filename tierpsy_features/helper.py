@@ -5,10 +5,10 @@ Created on Tue Aug 22 22:36:52 2017
 
 @author: ajaver
 """
-
+import pandas as pd
 import numpy as np
 import numba
-
+import math
 
 @numba.jit
 def fillfnan(arr):
@@ -57,6 +57,38 @@ def get_n_worms_estimate(frame_numbers, percentile = 99):
     else:
         n_worms_estimate = 0
     return n_worms_estimate
+
+
+def get_delta_in_frames(delta_time, fps):
+    '''Get the conversion of delta time in frames. Make sure it is more than one.'''
+    return max(1, int(round(fps*delta_time)))
+
+def add_derivatives(feats, cols2deriv, delta_frames, fps):
+    '''
+    Calculate the derivatives of timeseries features, and add the columns to the original dataframe.
+    '''
+    val_cols = [x for x in cols2deriv if x in feats]
+    
+    feats = feats.sort_values(by='timestamp')
+    
+    df_ts = feats[val_cols].copy()
+    df_ts.columns = ['d_' + x for x in df_ts.columns]
+    
+    m_o, m_f = math.floor(delta_frames/2), math.ceil(delta_frames/2)
+    
+    
+    vf = df_ts.iloc[delta_frames:].values
+    vo = df_ts.iloc[:-delta_frames].values
+    vv = (vf - vo)/(delta_frames/fps)
+    
+    #the series was too small to calculate the derivative
+    if vv.size > 0:
+        df_ts.loc[:] =  np.nan
+        df_ts.iloc[m_o:-m_f] = vv
+        
+    feats = pd.concat([feats, df_ts], axis=1)
+    
+    return feats
 
 class DataPartition():
     def __init__(self, partitions=None, n_segments=49):

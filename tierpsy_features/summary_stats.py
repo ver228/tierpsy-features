@@ -9,28 +9,32 @@ Created on Mon Oct  2 14:24:25 2017
 import pandas as pd
 import numpy as np
 import math
+from tierpsy_features.helper import get_n_worms_estimate, get_delta_in_frames, add_derivatives
 
-from tierpsy_features.helper import get_n_worms_estimate
 from tierpsy_features.events import get_event_stats, event_region_labels
 from tierpsy_features.path import get_path_extent_stats
 from tierpsy_features import timeseries_feats_columns, \
 ventral_signed_columns, path_curvature_columns, curvature_columns
 
-blob_feats_columns = [
-           'area', 'perimeter', 'box_length', 'box_width',
-           'quirkiness', 'compactness', 'solidity',
-           'hu0', 'hu1', 'hu2', 'hu3', 'hu4',
-           'hu5', 'hu6'
-           ]
+blob_feats_columns = ['blob_area',
+ 'blob_perimeter',
+ 'blob_box_length',
+ 'blob_box_width',
+ 'blob_quirkiness',
+ 'blob_compactness',
+ 'blob_solidity',
+ 'blob_hu0',
+ 'blob_hu1',
+ 'blob_hu2',
+ 'blob_hu3',
+ 'blob_hu4',
+ 'blob_hu5',
+ 'blob_hu6']
 
 feats2normalize = {
     'L' : [
        'speed',
-       'relative_speed_midbody', 
-       'relative_radial_velocity_head_tip',
-       'relative_radial_velocity_neck',
-       'relative_radial_velocity_hips',
-       'relative_radial_velocity_tail_tip',
+       'relative_to_body_speed_midbody',
        'head_tail_distance',
        'major_axis', 
        'minor_axis', 
@@ -43,7 +47,7 @@ feats2normalize = {
     '1/L' : path_curvature_columns + curvature_columns,
     'L^2' : ['area']
 }
-
+feats2normalize['L'] += [x for x in timeseries_feats_columns if 'radial_velocity' in x]
 
 def _normalize_by_w_length(timeseries_data, feats2norm):
     '''
@@ -93,7 +97,7 @@ def get_df_quantiles(df,
     deal with worms with unknown dorsal/ventral orientation.
     '''
     
-    def _filter_ventral_features(feats2check):
+    def _filter_ventral_features(feats2check):#%%
         valid_f = [x for x in feats2check if any(x.startswith(f) for f in feats2abs)]
         return valid_f
 
@@ -174,7 +178,7 @@ def _get_subdivided_features(timeseries_data, subdivision_dict):
     assert all(x in event_region_labels.keys() for x in subdivision_dict)
     
     
-    event_type_link = {
+    event_type_link = {#%%
             'food_region' : '_in_',
             'motion_mode' : '_w_'
             }
@@ -209,28 +213,117 @@ def _get_subdivided_features(timeseries_data, subdivision_dict):
     subdivided_df.index = timeseries_data.index
 
     return subdivided_df
-    
 
-    #%%
 
-def get_feat_stats(timeseries_data, fps, is_normalize):
-    '''
-    Get the features statistics from the features_timeseries, from both the
-    quantiles and event data.
-    '''
+
+#%%
+def get_summary_stats(timeseries_data, fps, blob_features = None, derivate_delta_time = None):
     
+    #TODO I need to decided a clever way to add the derivatives
+    ts_cols_all = timeseries_feats_columns + ['d_' + x for x in timeseries_feats_columns]
+    v_sign_cols = ventral_signed_columns + ['d_' + x for x in ventral_signed_columns]
+    
+    feats2norm = {}
+    for k,dat in feats2normalize.items():
+        feats2norm[k] = dat + ['d_' + x for x in dat]
+    ts_cols_norm = sum(feats2norm.values(), [])
+    
+    
+    ## event features
     n_worms_estimate = get_n_worms_estimate(timeseries_data['timestamp'])
-    
-    timeseries_stats_s = get_df_quantiles(timeseries_data, is_normalize = is_normalize)
     event_stats_s = get_event_stats(timeseries_data, fps , n_worms_estimate)
-    path_grid_stats_s = get_path_extent_stats(timeseries_data, fps, is_normalized = is_normalize)
     
-    #feat_stats_s['n_worms_estimate'] = n_worms_estimate
+    ## timeseries features
     
-    feat_stats_s = pd.concat((timeseries_stats_s, event_stats_s, path_grid_stats_s))
-    return feat_stats_s
+    ##### simple
+    timeseries_stats_s = get_df_quantiles(timeseries_data, 
+                                          feats2check = ts_cols_all,
+                                          feats2abs = v_sign_cols,
+                                          is_normalize = False)
     
-def get_time_groups(timestamp, time_ranges_m, fps):
+    path_grid_stats_s = get_path_extent_stats(timeseries_data, fps, is_normalized = False)
+    
+    feat_stats = pd.concat((timeseries_stats_s, path_grid_stats_s, event_stats_s))
+
+    ##### normalized by worm length
+    timeseries_stats_n = get_df_quantiles(timeseries_data, 
+                                          feats2check = ts_cols_norm,
+                                          feats2abs = v_sign_cols,
+                                          feats2norm = feats2norm, 
+                                          is_normalize = True)
+    
+    path_grid_stats_n = get_path_extent_stats(timeseries_data, fps, is_normalized = True)
+    feat_stats_n = pd.concat((timeseries_stats_n, path_grid_stats_n))
+    
+    ##### non-abs ventral signed features
+    feat_stats_v = get_df_quantiles(timeseries_data, 
+                                          feats2check = v_sign_cols,
+                                          feats2abs = v_sign_cols,
+                                          is_abs_ventral = False,
+                                          is_normalize = False)
+    v_sign_cols_norm = list(set(v_sign_cols) & set(ts_cols_norm))
+    
+    ##### non-abs and normalized ventral signed features
+    feat_stats_v_n = get_df_quantiles(timeseries_data, 
+                                          feats2check = v_sign_cols_norm,
+                                          feats2abs = v_sign_cols,
+                                          feats2norm = feats2norm,
+                                          is_abs_ventral = False,
+                                          is_normalize = True)
+    
+    
+    
+    
+    #add subdivisions
+    feat_stats_m_subdiv = get_df_quantiles(timeseries_data, 
+                                      feats2check = ts_cols_all, 
+                                      subdivision_dict = {'motion_mode':ts_cols_all}, 
+                                      is_abs_ventral = False)
+    
+    #summarize everything
+    exp_feats = [feat_stats, 
+                           feat_stats_m_subdiv, 
+                           feat_stats_n, 
+                           feat_stats_v, 
+                           feat_stats_v_n]
+    
+    if blob_features is not None:
+        assert not ((blob_features is None) and (delta_frames is None))
+        index_cols = ['worm_index', 'timestamp']
+        
+        #add the blob prefix to the blob features if it is not present
+        filt_func = lambda x : (not x.startswith('blob_') or (x in index_cols))
+        blob_features.columns = ['blob_' + x if filt_func(x) else x for x in blob_features.columns ]
+        
+        #add blob derivatives
+        
+        derivate_delta_frames = get_delta_in_frames(derivate_delta_time, fps)
+        #TODO I need to decided a clever way to add the derivatives
+        blob_features = pd.concat((timeseries_data[index_cols], blob_features), axis=1)
+        blob_l = []
+        for w_ind, blob_w in blob_features.groupby('worm_index'):
+            blob_w = add_derivatives(blob_w, blob_feats_columns, derivate_delta_frames, fps)
+            blob_l.append(blob_w)
+        blob_features = pd.concat(blob_l, axis=0)
+        
+        blob_cols = [x for x in blob_features.columns if not x in index_cols]
+        blob_features = blob_features[blob_cols]
+        
+        
+        #get blobstats
+        blob_stats = get_df_quantiles(blob_features, feats2check = blob_cols)
+        
+        blob_features['motion_mode'] = timeseries_data['motion_mode']
+        blob_stats_m_subdiv = get_df_quantiles(blob_features, 
+                                          feats2check = blob_cols, 
+                                          subdivision_dict = {'motion_mode':blob_cols}, 
+                                          is_abs_ventral = False)
+        exp_feats += [blob_stats, blob_stats_m_subdiv] 
+                       
+    exp_feats = pd.concat(exp_feats)
+    return exp_feats
+    
+def _get_time_groups(timestamp, time_ranges_m, fps):
     '''
     Obtain a vector that divides the timeseries data into groups
     
@@ -260,21 +353,19 @@ def get_time_groups(timestamp, time_ranges_m, fps):
     
     return time_group
 
-
-
-def get_feat_stats_binned(df, fps, time_ranges_m, is_normalize):
+def get_summary_stats_binned(df, fps, time_ranges_m, is_normalize):
     '''
     Calculate the stats of the features in df using `get_feat_stats` by binning 
     the data according to its time. See `_get_time_groups` to see the kind of 
     values that `time_range_m` accepts.
     '''
-    df['time_group'] = get_time_groups(df['timestamp'], time_ranges_m, fps)
+    df['time_group'] = _get_time_groups(df['timestamp'], time_ranges_m, fps)
     dat_agg = []
     for ind_t, dat in df.groupby('time_group'):
         if ind_t< 0:
             continue
         
-        feat_means_s = get_feat_stats(dat, fps, is_normalize) 
+        feat_means_s = get_summary_stats(dat, fps, is_normalize) 
         
         #add the time information at the begining
         feat_means_s = pd.Series(ind_t, index=['time_group']).append(feat_means_s)
@@ -284,7 +375,7 @@ def get_feat_stats_binned(df, fps, time_ranges_m, is_normalize):
     dat_agg = pd.concat(dat_agg, axis=1).T
     return dat_agg
 
-def collect_feat_stats(fnames, info_df, time_ranges_m = None, is_normalize = False):
+def collect_summary_stats(fnames, info_df, time_ranges_m = None, is_normalize = False):
     reserved_w = ['time_group', 'worm_index', 'timestamp']
     assert not any(x in info_df for x in reserved_w)
     
@@ -296,7 +387,7 @@ def collect_feat_stats(fnames, info_df, time_ranges_m = None, is_normalize = Fal
             fps = fid.get_storer('/trajectories_data').attrs['fps']
             features_timeseries = fid['/timeseries_data']
             
-        feat_mean_df = get_feat_stats_binned(features_timeseries, 
+        feat_mean_df = get_summary_stats_binned(features_timeseries, 
                                            fps, 
                                            time_ranges_m,
                                            is_normalize
@@ -312,135 +403,18 @@ def collect_feat_stats(fnames, info_df, time_ranges_m = None, is_normalize = Fal
     feat_means_df = pd.concat(all_data, ignore_index=True)
     return feat_means_df
 
-def get_feat_stats_all(timeseries_data, blob_features, fps):
-    
-    feat_stats = get_feat_stats(timeseries_data, fps, is_normalize = False)
-    
-    
-    #this is a dirty solution to avoid duplicates but we are testing right now
-    feat_stats_n = get_feat_stats(timeseries_data, fps, is_normalize = True)
-    feat_stats_n = feat_stats_n[[x for x in feat_stats_n.index if x not in feat_stats.index]]
-    
-    feat_stats_v = get_df_quantiles(timeseries_data, 
-                     feats2check = ventral_signed_columns, 
-                     is_abs_ventral = False, 
-                     is_normalize = False)
-    
-    
-    feat_stats_v_n = get_df_quantiles(timeseries_data, 
-                     feats2check = ventral_signed_columns, 
-                     is_abs_ventral = False, 
-                     is_normalize = True)
-    feat_stats_v_n = feat_stats_v_n[[x for x in feat_stats_v_n.index if x not in feat_stats_v.index]]
-    
-    blob_stats = get_df_quantiles(blob_features, feats2check = blob_feats_columns)
-    blob_stats.index = ['blob_' + x for x in blob_stats.index]
-    
-    exp_feats = pd.concat((feat_stats, feat_stats_n, blob_stats, feat_stats_v, feat_stats_v_n))
-        
-    return exp_feats
-#%%
-def _get_dev_stats(timeseries_data, blob_features, fps, delta_time = 1/3):
-    
-    delta_frames = int(round(fps*delta_time))
-    delta_time = delta_frames/fps
-    
-    e_cols = ['motion_mode']
-    ind_cols = ['worm_index', 'timestamp']
-    df = timeseries_data[ind_cols + e_cols + timeseries_feats_columns]
-    
-    df_b = blob_features[blob_feats_columns]
-    df_b.columns = ['blob_' + x for x in df_b.columns]
-    df = pd.concat((df, df_b), axis=1)
-    
-    dd = (ind_cols+e_cols)
-    v_cols = [x for x in df.columns if x not in dd]
-    
-    
-    all_vv = []
-    
-    m_o, m_f = math.floor(delta_frames/2), math.ceil(delta_frames/2)
-    for w_ind, w_dat in df.groupby('worm_index'):
-        if w_dat.shape[0] < delta_frames:
-            pass
-        vf = w_dat[v_cols].iloc[delta_frames:].reset_index(drop=True)
-        vo = w_dat[v_cols].iloc[:-delta_frames].reset_index(drop=True)
-        vv = (vf - vo)/delta_time
-        
-        mf = w_dat[e_cols].iloc[m_o:-m_f].reset_index(drop=True)
-        vv[e_cols] = mf
-        all_vv.append(vv)
-        
-    df_v = pd.concat(all_vv, ignore_index=True)
-    
-    feats_dev_stat = get_df_quantiles(df_v, 
-                                   feats2check = v_cols,
-                                   subdivision_dict = {'motion_mode':v_cols},
-                                   is_remove_subdivided = False,
-                                   is_abs_ventral = False)
-    feats_dev_stat.index = ['d_' + x for x in feats_dev_stat.index]
-    
-    
-    return feats_dev_stat 
-#%%
-def _test_get_feat_stats_all(timeseries_data, blob_features, fps):
-    # be careful the blob features has some repeated names like area...
-    
-    #%%
-    feat_stats = get_feat_stats(timeseries_data, fps, is_normalize = False)
-    
-    
-    #this is a dirty solution to avoid duplicates but we are testing right now
-    feat_stats_n = get_feat_stats(timeseries_data, fps, is_normalize = True)
-    feat_stats_n = feat_stats_n[[x for x in feat_stats_n.index if x not in feat_stats.index]]
-    
-    feat_stats_v = get_df_quantiles(timeseries_data, 
-                     feats2check = ventral_signed_columns, 
-                     is_abs_ventral = False, 
-                     is_normalize = False)
-    
-    
-    feat_stats_v_n = get_df_quantiles(timeseries_data, 
-                     feats2check = ventral_signed_columns, 
-                     is_abs_ventral = False, 
-                     is_normalize = True)
-    feat_stats_v_n = feat_stats_v_n[[x for x in feat_stats_v_n.index if x not in feat_stats_v.index]]
-    
-    blob_stats = get_df_quantiles(blob_features, feats2check = blob_feats_columns)
-    blob_stats.index = ['blob_' + x for x in blob_stats.index]
-    
-    blob_features['motion_mode'] = timeseries_data['motion_mode']
-    blob_stats_m_subdiv = get_df_quantiles(blob_features, 
-                                      feats2check = blob_feats_columns, 
-                                      subdivision_dict = {'motion_mode':blob_feats_columns}, 
-                                      is_abs_ventral = False)
-    blob_stats_m_subdiv.index = ['blob_' + x for x in blob_stats_m_subdiv.index]
-    
-    feat_stats_m_subdiv = get_df_quantiles(timeseries_data, 
-                                      feats2check = timeseries_feats_columns, 
-                                      subdivision_dict = {'motion_mode':timeseries_feats_columns}, 
-                                      is_abs_ventral = False)
-    
-    feats_dev_stat = _get_dev_stats(timeseries_data, blob_features, fps)
-    
-    exp_feats = pd.concat((feat_stats, 
-                           feat_stats_m_subdiv, 
-                           feat_stats_n, blob_stats, 
-                           blob_stats_m_subdiv, 
-                           feat_stats_v, 
-                           feat_stats_v_n, 
-                           feats_dev_stat))
-    #%%
-    return exp_feats
+
 #%%
 if __name__ == '__main__':
     from tierpsy.helper.params import read_fps
     #fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
+    
+    
     fname = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR/Results/CeNDR_Set1_020617/WN2002_worms10_food1-10_Set1_Pos4_Ch4_02062017_115723_featuresN.hdf5'
     with pd.HDFStore(fname, 'r') as fid:
         timeseries_data = fid['/timeseries_data']
         blob_features = fid['/blob_features']
     fps = read_fps(fname)
-    #%%
-    feat_stats = _test_get_feat_stats_all(timeseries_data, blob_features, fps)
+    delta_frames = max(1, int(fps/3))
+    feat_stats = get_summary_stats(timeseries_data, fps,  blob_features, delta_frames)
     

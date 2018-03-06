@@ -9,6 +9,8 @@ import pandas as pd
 import numpy as np
 import warnings
 
+from tierpsy_features.helper import get_delta_in_frames, add_derivatives
+
 from tierpsy_features.velocities import get_velocity_features, velocities_columns
 from tierpsy_features.postures import get_morphology_features, morphology_columns, \
 get_posture_features, posture_columns, posture_aux
@@ -24,29 +26,23 @@ timeseries_feats_columns = velocities_columns + morphology_columns + posture_col
 
 aux_columns =  posture_aux + path_curvature_columns_aux
 
-timeseries_all_columns = timeseries_feats_columns + event_columns + aux_columns
 
-ventral_signed_columns = [
-        'angular_velocity',
-        'relative_speed_midbody',
-        'relative_angular_velocity_head_tip',
-        'relative_angular_velocity_neck',
-        'relative_angular_velocity_hips', 
-        'relative_angular_velocity_tail_tip', 
-        'eigen_projection_1', 
-        'eigen_projection_2', 
-        'eigen_projection_3', 
-        'eigen_projection_4', 
-        'eigen_projection_5', 
-        'eigen_projection_6', 
-        'eigen_projection_7', 
-        ] + path_curvature_columns + curvature_columns
+#add derivative columns
+timeseries_all_columns = timeseries_feats_columns + ['d_' + x for x in timeseries_feats_columns]
+timeseries_all_columns += (event_columns + aux_columns)
 
+ventral_signed_columns = [ 'relative_to_body_speed_midbody' ] 
+ventral_signed_columns += path_curvature_columns + curvature_columns
+ventral_signed_columns += [x for x in velocities_columns if 'angular_velocity' in x]
+ventral_signed_columns += [x for x in velocities_columns if 'eigen_projection' in x]
+        
 
 #all the ventral_signed_columns must be in timeseries_feats_columns
 assert len(set(ventral_signed_columns) - set(timeseries_feats_columns))  == 0 
 
 valid_ventral_side = ['','clockwise','anticlockwise', 'unknown']
+
+
 
 def get_timeseries_features(skeletons, 
                             widths = None, 
@@ -71,6 +67,8 @@ def get_timeseries_features(skeletons,
     
     assert ventral_side in valid_ventral_side
 
+    derivate_delta_frames = get_delta_in_frames(derivate_delta_time, fps)
+
     feat_morph = get_morphology_features(skeletons, widths, dorsal_contours, ventral_contours)
     feat_posture = get_posture_features(skeletons)
     
@@ -82,7 +80,7 @@ def get_timeseries_features(skeletons,
     curvatures = get_curvature_features(skeletons)
     features_df = features_df.join(curvatures)
     
-    velocities = get_velocity_features(skeletons, derivate_delta_time, fps)
+    velocities = get_velocity_features(skeletons, derivate_delta_frames, fps)
     if velocities is not None:
         features_df = features_df.join(velocities)
     
@@ -110,6 +108,14 @@ def get_timeseries_features(skeletons,
     dd = [x for x in events_df if x in event_columns]
     features_df = features_df.join(events_df[dd])
     
+    #append features relative to the neck and hips. I am not sure if i will included them as default
+    
+    
+    features_df = add_derivatives(features_df, 
+                                  timeseries_feats_columns, 
+                                  derivate_delta_frames, 
+                                  fps)
+    
     #add any missing column
     all_columns = ['timestamp'] + timeseries_all_columns
     df = pd.DataFrame([], columns = timeseries_all_columns)
@@ -120,4 +126,5 @@ def get_timeseries_features(skeletons,
     if ventral_side == 'clockwise':
         features_df[ventral_signed_columns] *= -1
     
+            
     return features_df

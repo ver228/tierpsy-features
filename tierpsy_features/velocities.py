@@ -12,13 +12,37 @@ from matplotlib import animation, patches
 
 from tierpsy_features.helper import DataPartition, nanunwrap
 
-velocities_columns = ['speed', 'angular_velocity', 'relative_speed_midbody',
-       'relative_radial_velocity_head_tip',
-       'relative_angular_velocity_head_tip', 'relative_radial_velocity_neck',
-       'relative_angular_velocity_neck', 'relative_radial_velocity_hips',
-       'relative_angular_velocity_hips', 'relative_radial_velocity_tail_tip',
-       'relative_angular_velocity_tail_tip']
+# i am including an excess of subdivisions with the hope to later reduce them
+velocities_columns = ['speed', 'angular_velocity', 'relative_to_body_speed_midbody',
+       'relative_to_body_radial_velocity_head_tip',
+       'relative_to_body_angular_velocity_head_tip',
+       'relative_to_body_radial_velocity_neck',
+       'relative_to_body_angular_velocity_neck',
+       'relative_to_body_radial_velocity_hips',
+       'relative_to_body_angular_velocity_hips',
+       'relative_to_body_radial_velocity_tail_tip',
+       'relative_to_body_angular_velocity_tail_tip', 'speed_neck',
+       'angular_velocity_neck', 'relative_to_neck_radial_velocity_head_tip',
+       'relative_to_neck_angular_velocity_head_tip', 'speed_head',
+       'angular_velocity_head', 'relative_to_head_radial_velocity_head_tip',
+       'relative_to_head_angular_velocity_head_tip', 'speed_hips',
+       'angular_velocity_hips', 'relative_to_hips_radial_velocity_tail_tip',
+       'relative_to_hips_angular_velocity_tail_tip', 'speed_tail',
+       'angular_velocity_tail', 'relative_to_tail_radial_velocity_tail_tip',
+       'relative_to_tail_angular_velocity_tail_tip', 'speed_midbody',
+       'angular_velocity_midbody']
+#%% features that are relative to specific body parts
+relative_to_dict = {'body' : ('head_tip', 'neck', 'hips', 'tail_tip'), 
+               'neck' : ('head_tip',),
+               'head' : ('head_tip',),
+               'hips' : ('tail_tip',),
+               'tail' : ('tail_tip',),
+               'midbody' : [],
+               }
 
+
+
+#%%
 def _h_orientation_vector(x, axis=None):
     return x[:, 0, :] - x[:, -1, :]
 
@@ -93,7 +117,7 @@ def get_velocity(skeletons, partition, delta_frames, fps):
     angular_velocity = _h_get_velocity(orientation, delta_frames, fps)
     
     centered_skeleton = _h_center_skeleton(skeletons, orientation, coords)
-    #%%
+    
     return signed_speed, angular_velocity, centered_skeleton
 
 #%%
@@ -110,7 +134,7 @@ def _h_relative_velocity(segment_coords, delta_frames, fps):
 
 
 
-
+#%%
 def get_relative_velocities(centered_skeleton, partitions, delta_frames, fps):
     p_obj = DataPartition(partitions, n_segments=centered_skeleton.shape[1])
 
@@ -131,7 +155,11 @@ def get_relative_velocities(centered_skeleton, partitions, delta_frames, fps):
     return r_radial_velocities, r_angular_velocities
 
 
-def get_relative_speed_midbody(centered_skeleton, partitions, delta_frames, fps):
+def get_relative_speed_midbody(centered_skeleton, delta_frames, fps):
+    '''
+    This velocity meassures how the midbody changes in relation to the body central axis.
+    I cannot really define this for the othes parts without getting too complicated.
+    '''
     p_obj = DataPartition(['midbody'], n_segments=centered_skeleton.shape[1])
     segment_coords = p_obj.apply(centered_skeleton, 'midbody', func=np.nanmean)
     return _h_get_velocity(segment_coords[:, 0], delta_frames, fps)
@@ -193,39 +221,55 @@ def animate_velocity(skel_a, ini_arrow, arrow_size, speed_v, ang_v):
     return anim
 
 #%%
-def get_velocity_features(skeletons, delta_time, fps):
+def get_velocity_features(skeletons, delta_frames, fps):
+    assert isinstance(delta_frames, int)
     
-    partitions = ['head_tip', 'neck', 'hips', 'tail_tip']
-    
-    delta_frames = int(round(fps*delta_time))
     if skeletons.shape[0] < delta_frames:
         return
     
-    
-
-    signed_speed_body, angular_velocity_body, centered_skeleton = get_velocity(skeletons, 'body', delta_frames, fps)
-    r_radial_velocities, r_angular_velocities = \
-        get_relative_velocities(centered_skeleton, 
+    def _process_part(part):
+        signed_speed, angular_velocity, centered_skeleton = get_velocity(skeletons, part, delta_frames, fps)
+        
+        
+                
+        
+        if part == 'body':
+            #speed without prefix is the body speed
+            part_velocities = [('speed', signed_speed),
+                               ('angular_velocity', angular_velocity)]
+            #this is really a special case. midbody moving like this <- | ->
+            relative_speed_midbody = get_relative_speed_midbody(centered_skeleton, delta_frames, fps)
+            
+            #add the body signed speed and angular velocity. This values are very similar for the other parts
+            part_velocities.append(('relative_to_body_speed_midbody', relative_speed_midbody))
+        else:
+            #at the end i might only calculate this for the body, but i want to do a massive test to feel sure about this
+            part_velocities = [('speed_' + part, signed_speed),
+                               ('angular_velocity_' + part, angular_velocity)]
+            
+        if part in relative_to_dict:
+            partitions = relative_to_dict[part]
+            r_radial_velocities, r_angular_velocities = get_relative_velocities(centered_skeleton, 
                                     partitions, 
                                     delta_frames, 
                                     fps)
-    relative_speed_midbody = get_relative_speed_midbody(centered_skeleton, partitions, delta_frames, fps)
+            #pack into a dictionary
+            for p in partitions:
+                k_r = 'relative_to_{}_radial_velocity_{}'.format(part, p)
+                part_velocities.append((k_r, r_radial_velocities[p]))
+                
+                k_a = 'relative_to_{}_angular_velocity_{}'.format(part, p)
+                part_velocities.append((k_a, r_angular_velocities[p]))
+        
+        return part_velocities
+        
+    #process all the parts
+    velocities = map(_process_part, relative_to_dict.keys())
+    #flatten list
+    velocities = sum(velocities, []) 
     
-    velocities = OrderedDict(
-            [
-                ('speed',signed_speed_body),
-                ('angular_velocity',angular_velocity_body),
-                ('relative_speed_midbody', relative_speed_midbody)
-                ]
-            )
-    
-    for p in partitions:
-        velocities['relative_radial_velocity_' + p] = r_radial_velocities[p]    
-        velocities['relative_angular_velocity_' + p] = r_angular_velocities[p]
-    
-    
-    #get into data frame
-    velocities = pd.DataFrame.from_dict(velocities)
+    #put all the data into a dataframe
+    velocities = pd.DataFrame(OrderedDict(velocities))
     
     assert velocities.shape[0] == skeletons.shape[0]
     
@@ -240,5 +284,7 @@ if __name__ == '__main__':
     
     fps = 25
     delta_time = 1/3 #delta time in seconds to calculate the velocity
-    velocities = get_velocity_features(skeletons, delta_time, fps)
+    
+    delta_frames = max(1, int(round(fps*delta_time)))
+    velocities = get_velocity_features(skeletons, delta_frames, fps)
     

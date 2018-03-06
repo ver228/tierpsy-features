@@ -13,11 +13,26 @@ import pandas as pd
 from scipy.interpolate import UnivariateSpline
 from scipy.signal import savgol_filter
 
-from tierpsy_features.helper import nanunwrap
+from tierpsy_features.helper import nanunwrap, DataPartition
 from tierpsy_features.postures import get_length
 
-curvature_columns = ['curvature_head', 'curvature_hips', 'curvature_midbody',
-       'curvature_neck', 'curvature_tail']
+curvature_columns = [
+        'curvature_head', 
+        'curvature_hips', 
+        'curvature_midbody',
+        'curvature_neck', 
+        'curvature_tail', 
+        'curvature_mean_head',
+        'curvature_mean_neck',
+        'curvature_mean_midbody',
+        'curvature_mean_hips',
+        'curvature_mean_tail',
+        'curvature_std_head', 
+        'curvature_std_neck', 
+        'curvature_std_midbody', 
+        'curvature_std_hips', 
+        'curvature_std_tail'
+        ]
 
 def _curvature_angles(skeletons, window_length = None, lengths=None):
     if window_length is None:
@@ -209,8 +224,6 @@ def get_curvature_features(skeletons, method = 'grad', points_window=None):
     
     assert method in curvature_funcs
     
-    
-    
     if method == 'angle':
         segments_ind_dflt = {
             'head' : 0,
@@ -233,6 +246,20 @@ def get_curvature_features(skeletons, method = 'grad', points_window=None):
     segments_ind = {k:int(round(x*max_angle_index)) for k,x in segments_ind_dflt.items()}
     
     curv_dict = {'curvature_' + x :curvatures[:, ind] for x,ind in segments_ind.items()}
+    
+    #standard deviation of the curvature around the segments (seems to be usefull in classification)
+    p_obj = DataPartition(list(segments_ind_dflt.keys()), n_segments = skeletons.shape[1])
+    
+    #i need to use nan because the curvature at the ends is not defined
+    curv_std = p_obj.apply_partitions(curvatures, func=np.nanstd)
+    for key, val in curv_std.items():
+        curv_dict['curvature_std_' + key] = val
+    
+    #i need to use nan because the curvature at the ends is not defined
+    curv_mean = p_obj.apply_partitions(curvatures, func=np.nanmean)
+    for key, val in curv_mean.items():
+        curv_dict['curvature_mean_' + key] = val
+    
     data = pd.DataFrame.from_dict(curv_dict)
     
     return data
