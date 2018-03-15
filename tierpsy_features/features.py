@@ -34,7 +34,7 @@ timeseries_all_columns += (event_columns + aux_columns)
 ventral_signed_columns = [ 'relative_to_body_speed_midbody' ] 
 ventral_signed_columns += path_curvature_columns + curvature_columns
 ventral_signed_columns += [x for x in velocities_columns if 'angular_velocity' in x]
-ventral_signed_columns += [x for x in velocities_columns if 'eigen_projection' in x]
+ventral_signed_columns += [x for x in posture_columns if 'eigen_projection' in x]
         
 
 #all the ventral_signed_columns must be in timeseries_feats_columns

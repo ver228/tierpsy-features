@@ -23,21 +23,27 @@ velocities_columns = ['speed', 'angular_velocity', 'relative_to_body_speed_midbo
        'relative_to_body_radial_velocity_tail_tip',
        'relative_to_body_angular_velocity_tail_tip', 'speed_neck',
        'angular_velocity_neck', 'relative_to_neck_radial_velocity_head_tip',
-       'relative_to_neck_angular_velocity_head_tip', 'speed_head',
-       'angular_velocity_head', 'relative_to_head_radial_velocity_head_tip',
-       'relative_to_head_angular_velocity_head_tip', 'speed_hips',
+       'relative_to_neck_angular_velocity_head_tip', 'speed_head_base',
+       'angular_velocity_head_base',
+       'relative_to_head_base_radial_velocity_head_tip',
+       'relative_to_head_base_angular_velocity_head_tip', 'speed_hips',
        'angular_velocity_hips', 'relative_to_hips_radial_velocity_tail_tip',
-       'relative_to_hips_angular_velocity_tail_tip', 'speed_tail',
-       'angular_velocity_tail', 'relative_to_tail_radial_velocity_tail_tip',
-       'relative_to_tail_angular_velocity_tail_tip', 'speed_midbody',
-       'angular_velocity_midbody']
+       'relative_to_hips_angular_velocity_tail_tip', 'speed_tail_base',
+       'angular_velocity_tail_base',
+       'relative_to_tail_base_radial_velocity_tail_tip',
+       'relative_to_tail_base_angular_velocity_tail_tip', 'speed_midbody',
+       'angular_velocity_midbody', 'speed_head_tip',
+       'angular_velocity_head_tip', 'speed_tail_tip',
+       'angular_velocity_tail_tip']
 #%% features that are relative to specific body parts
 relative_to_dict = {'body' : ('head_tip', 'neck', 'hips', 'tail_tip'), 
                'neck' : ('head_tip',),
-               'head' : ('head_tip',),
+               'head_base' : ('head_tip',),
                'hips' : ('tail_tip',),
-               'tail' : ('tail_tip',),
+               'tail_base' : ('tail_tip',),
                'midbody' : [],
+               'head_tip' : [],
+               'tail_tip' : [],
                }
 
 

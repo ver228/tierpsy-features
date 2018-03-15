@@ -8,13 +8,18 @@ Created on Mon Oct  2 14:24:25 2017
 
 import pandas as pd
 import numpy as np
-import math
 from tierpsy_features.helper import get_n_worms_estimate, get_delta_in_frames, add_derivatives
 
 from tierpsy_features.events import get_event_stats, event_region_labels
 from tierpsy_features.path import get_path_extent_stats
 from tierpsy_features import timeseries_feats_columns, \
 ventral_signed_columns, path_curvature_columns, curvature_columns
+
+
+ #this is a hack to do not calculate the paused subdivision. I does not seem to be informative at all...
+event_region_labels_r = event_region_labels.copy()
+#del event_region_labels_r['motion_mode'][0]
+
 
 blob_feats_columns = ['blob_area',
  'blob_perimeter',
@@ -33,8 +38,6 @@ blob_feats_columns = ['blob_area',
 
 feats2normalize = {
     'L' : [
-       'speed',
-       'relative_to_body_speed_midbody',
        'head_tail_distance',
        'major_axis', 
        'minor_axis', 
@@ -48,7 +51,8 @@ feats2normalize = {
     'L^2' : ['area']
 }
 feats2normalize['L'] += [x for x in timeseries_feats_columns if 'radial_velocity' in x]
-
+feats2normalize['L'] += [x for x in timeseries_feats_columns if 'speed' in x]
+#%%
 def _normalize_by_w_length(timeseries_data, feats2norm):
     '''
     Normalize features by body length. This is far from being the most efficient solution, but it is the easier to implement.
@@ -96,11 +100,17 @@ def get_df_quantiles(df,
     In the features in `feats2abs` we are going to use only the absolute. This is to 
     deal with worms with unknown dorsal/ventral orientation.
     '''
+    q_vals = [0.1, 0.5, 0.9] #percentiles to calculate
+    iqr_limits = [0.25, 0.75] # range of percentiles used for the interquantile distance
+    valid_q = q_vals + iqr_limits
     
+    df = df.copy() #like this i can modify directoy the df without long lasting consequences
+    
+    #filter features to be abs
     def _filter_ventral_features(feats2check):#%%
         valid_f = [x for x in feats2check if any(x.startswith(f) for f in feats2abs)]
         return valid_f
-
+    
     #filter default columns in case they are not present
     feats2check = [x for x in feats2check if x in df]
     
@@ -112,39 +122,37 @@ def get_df_quantiles(df,
             subdivision_dict_r[e_subdivide] = ff
     subdivision_dict = subdivision_dict_r
     
+    
     #subdivide a feature using the event features
     subdivided_df = _get_subdivided_features(df, subdivision_dict = subdivision_dict)
     df = df.join(subdivided_df)
     feats2check += subdivided_df.columns.tolist()
-    
     if is_remove_subdivided:
         df = df[[x for x  in df if not x in feats2subdivide]]
         feats2check = [x for x in feats2check if x not in feats2subdivide]
     
+    #add normalized features
     if is_normalize:
         df, changed_feats = _normalize_by_w_length(df, feats2norm = feats2norm)
         feats2check = [x if not x in changed_feats else changed_feats[x] for x in feats2check]
-        
-    q_vals = [0.1, 0.5, 0.9]
-    iqr_limits = [0.25, 0.75]
     
-    valid_q = q_vals + iqr_limits
-    
-    feat_mean = None
+    #abs features that are ventral/dorsal side
     if is_abs_ventral:
         feats2abs = _filter_ventral_features(feats2check)
         #find features that match ventral_signed_columns
         if feats2abs:
-            Q = df[feats2abs].abs().quantile(valid_q)
-            Q.columns = [x+'_abs' for x in Q.columns]
-            feats2check = [x for x in feats2check if not x in feats2abs]
-            feat_mean = pd.concat((feat_mean, Q), axis=1)
+            #normalize
+            df[feats2abs] = df[feats2abs].abs()
+            #change name
+            df.columns = [x + '_abs' if x in feats2abs else x for x in df.columns]
+            feats2check = [x + '_abs' if x in feats2abs else x for x in feats2check]
     
-    
+    #calculate quantiles
+    feat_mean = None
     Q = df[feats2check].quantile(valid_q)
     feat_mean = pd.concat((feat_mean, Q), axis=1)
-    
-    
+
+    #name correctly
     dat = []
     for q in q_vals:
         q_dat = feat_mean.loc[q]
@@ -175,7 +183,7 @@ def _get_subdivided_features(timeseries_data, subdivision_dict):
     '''
     
     #assert all the subdivision keys are known events
-    assert all(x in event_region_labels.keys() for x in subdivision_dict)
+    assert all(x in event_region_labels_r.keys() for x in subdivision_dict)
     
     
     event_type_link = {#%%
@@ -196,8 +204,12 @@ def _get_subdivided_features(timeseries_data, subdivision_dict):
             
             for f_col in timeseries_cols:
                 f_data = timeseries_data[f_col].values.copy()
-                f_data[_flag] = np.nan
                 
+                try:
+                    f_data[_flag] = np.nan
+                except:
+                    import pdb
+                    pdb.set_trace()
                 new_name = f_col + str_l + label
                 
                 subdivided_data.append((new_name, f_data))
@@ -217,7 +229,11 @@ def _get_subdivided_features(timeseries_data, subdivision_dict):
 
 
 #%%
-def get_summary_stats(timeseries_data, fps, blob_features = None, derivate_delta_time = None):
+def get_summary_stats(timeseries_data, 
+                      fps, 
+                      blob_features = None, 
+                      derivate_delta_time = None,
+                      only_abs_ventral = False):
     
     #TODO I need to decided a clever way to add the derivatives
     ts_cols_all = timeseries_feats_columns + ['d_' + x for x in timeseries_feats_columns]
@@ -228,6 +244,8 @@ def get_summary_stats(timeseries_data, fps, blob_features = None, derivate_delta
         feats2norm[k] = dat + ['d_' + x for x in dat]
     ts_cols_norm = sum(feats2norm.values(), [])
     
+    #summarize everything
+    exp_feats = [] 
     
     ## event features
     n_worms_estimate = get_n_worms_estimate(timeseries_data['timestamp'])
@@ -239,12 +257,14 @@ def get_summary_stats(timeseries_data, fps, blob_features = None, derivate_delta
     timeseries_stats_s = get_df_quantiles(timeseries_data, 
                                           feats2check = ts_cols_all,
                                           feats2abs = v_sign_cols,
+                                          feats2norm = feats2norm, 
                                           is_normalize = False)
     
     path_grid_stats_s = get_path_extent_stats(timeseries_data, fps, is_normalized = False)
     
     feat_stats = pd.concat((timeseries_stats_s, path_grid_stats_s, event_stats_s))
-
+    
+    exp_feats.append(feat_stats)
     ##### normalized by worm length
     timeseries_stats_n = get_df_quantiles(timeseries_data, 
                                           feats2check = ts_cols_norm,
@@ -254,38 +274,49 @@ def get_summary_stats(timeseries_data, fps, blob_features = None, derivate_delta
     
     path_grid_stats_n = get_path_extent_stats(timeseries_data, fps, is_normalized = True)
     feat_stats_n = pd.concat((timeseries_stats_n, path_grid_stats_n))
-    
-    ##### non-abs ventral signed features
-    feat_stats_v = get_df_quantiles(timeseries_data, 
-                                          feats2check = v_sign_cols,
-                                          feats2abs = v_sign_cols,
-                                          is_abs_ventral = False,
-                                          is_normalize = False)
-    v_sign_cols_norm = list(set(v_sign_cols) & set(ts_cols_norm))
-    
-    ##### non-abs and normalized ventral signed features
-    feat_stats_v_n = get_df_quantiles(timeseries_data, 
-                                          feats2check = v_sign_cols_norm,
-                                          feats2abs = v_sign_cols,
-                                          feats2norm = feats2norm,
-                                          is_abs_ventral = False,
-                                          is_normalize = True)
-    
-    
-    
+    exp_feats.append(feat_stats_n)
     
     #add subdivisions
     feat_stats_m_subdiv = get_df_quantiles(timeseries_data, 
                                       feats2check = ts_cols_all, 
-                                      subdivision_dict = {'motion_mode':ts_cols_all}, 
-                                      is_abs_ventral = False)
+                                      feats2abs = v_sign_cols,
+                                      feats2norm = feats2norm, 
+                                      subdivision_dict = {'motion_mode' : ts_cols_all}, 
+                                      is_abs_ventral = True) #i only calculate the subdivision abs or not abs
+    exp_feats.append(feat_stats_m_subdiv)
     
-    #summarize everything
-    exp_feats = [feat_stats, 
-                           feat_stats_m_subdiv, 
-                           feat_stats_n, 
-                           feat_stats_v, 
-                           feat_stats_v_n]
+    if not only_abs_ventral:
+        ##### non-abs ventral signed features
+        feat_stats_v = get_df_quantiles(timeseries_data, 
+                                              feats2check = v_sign_cols,
+                                              feats2abs = v_sign_cols,
+                                              feats2norm = feats2norm, 
+                                              is_abs_ventral = False,
+                                              is_normalize = False)
+        
+        exp_feats.append(feat_stats_v)
+        
+        ##### non-abs and normalized ventral signed features
+        v_sign_cols_norm = list(set(v_sign_cols) & set(ts_cols_norm))
+        feat_stats_v_n = get_df_quantiles(timeseries_data, 
+                                              feats2check = v_sign_cols_norm,
+                                              feats2abs = v_sign_cols,
+                                              feats2norm = feats2norm,
+                                              is_abs_ventral = False,
+                                              is_normalize = True)
+        exp_feats.append(feat_stats_v_n)
+    
+        
+        #add subdivisions
+        feat_stats_m_subdiv_v = get_df_quantiles(timeseries_data, 
+                                      feats2check = v_sign_cols, 
+                                      feats2abs = v_sign_cols,
+                                      subdivision_dict = {'motion_mode' : ts_cols_all}, 
+                                      is_abs_ventral = False,
+                                      is_normalize = False) #i only calculate the subdivision abs or not abs
+    
+        exp_feats.append(feat_stats_m_subdiv_v)
+    
     
     if blob_features is not None:
         assert not ((blob_features is None) and (delta_frames is None))
@@ -304,21 +335,24 @@ def get_summary_stats(timeseries_data, fps, blob_features = None, derivate_delta
         for w_ind, blob_w in blob_features.groupby('worm_index'):
             blob_w = add_derivatives(blob_w, blob_feats_columns, derivate_delta_frames, fps)
             blob_l.append(blob_w)
-        blob_features = pd.concat(blob_l, axis=0)
-        
-        blob_cols = [x for x in blob_features.columns if not x in index_cols]
-        blob_features = blob_features[blob_cols]
-        
-        
-        #get blobstats
-        blob_stats = get_df_quantiles(blob_features, feats2check = blob_cols)
-        
-        blob_features['motion_mode'] = timeseries_data['motion_mode']
-        blob_stats_m_subdiv = get_df_quantiles(blob_features, 
-                                          feats2check = blob_cols, 
-                                          subdivision_dict = {'motion_mode':blob_cols}, 
-                                          is_abs_ventral = False)
-        exp_feats += [blob_stats, blob_stats_m_subdiv] 
+
+        if blob_l:
+            blob_features = pd.concat(blob_l, axis=0)
+            
+            #select only the valid columns
+            blob_feats_columns_d = blob_feats_columns + ['d_' + x for x in blob_feats_columns]
+            blob_cols = [x for x in blob_feats_columns_d if x in blob_features]
+            blob_features = blob_features[blob_cols]
+            
+            #get blobstats
+            blob_stats = get_df_quantiles(blob_features, feats2check = blob_cols)
+            
+            blob_features['motion_mode'] = timeseries_data['motion_mode']
+            blob_stats_m_subdiv = get_df_quantiles(blob_features, 
+                                              feats2check = blob_cols, 
+                                              subdivision_dict = {'motion_mode':blob_cols}, 
+                                              is_abs_ventral = False)
+            exp_feats += [blob_stats, blob_stats_m_subdiv] 
                        
     exp_feats = pd.concat(exp_feats)
     return exp_feats
@@ -408,7 +442,7 @@ def collect_summary_stats(fnames, info_df, time_ranges_m = None, is_normalize = 
 if __name__ == '__main__':
     from tierpsy.helper.params import read_fps
     #fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
-    
+    #%%
     
     fname = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR/Results/CeNDR_Set1_020617/WN2002_worms10_food1-10_Set1_Pos4_Ch4_02062017_115723_featuresN.hdf5'
     with pd.HDFStore(fname, 'r') as fid:
@@ -416,5 +450,12 @@ if __name__ == '__main__':
         blob_features = fid['/blob_features']
     fps = read_fps(fname)
     delta_frames = max(1, int(fps/3))
-    feat_stats = get_summary_stats(timeseries_data, fps,  blob_features, delta_frames)
+    
+    
+    feat_stats = get_summary_stats(timeseries_data, 
+                                   fps,  
+                                   blob_features, 
+                                   delta_frames,
+                                   only_abs_ventral = True
+                                   )
     
