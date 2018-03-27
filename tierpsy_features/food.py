@@ -12,7 +12,7 @@ from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 from tierpsy_features.velocities import _h_segment_position
 
-food_columns = ('orientation_food_edge', 'dist_from_food_edge')
+food_columns = ['orientation_food_edge', 'dist_from_food_edge']
 
 #%%
 def _is_valid_cnt(x):

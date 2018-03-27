@@ -15,7 +15,9 @@ from tierpsy_features.path import get_path_extent_stats
 from tierpsy_features import timeseries_feats_columns, \
 ventral_signed_columns, path_curvature_columns, curvature_columns
 
-blob_feats_columns = ('blob_area',
+index_colums = ['worm_index', 'timestamp']
+        
+blob_feats_columns = ['blob_area',
  'blob_perimeter',
  'blob_box_length',
  'blob_box_width',
@@ -29,11 +31,11 @@ blob_feats_columns = ('blob_area',
  'blob_hu4',
  'blob_hu5',
  'blob_hu6'
- )
+ ]
 
 #get the ratios to be normalized
 feats2normalize = {
-    'L' : (
+    'L' : [
        'head_tail_distance',
        'major_axis', 
        'minor_axis', 
@@ -42,16 +44,16 @@ feats2normalize = {
        'width_head_base', 
        'width_midbody', 
        'width_tail_base'
-       ),
+       ],
     '1/L' : path_curvature_columns + curvature_columns,
-    'L^2' : ('area',)
+    'L^2' : ['area']
 }
-feats2normalize['L'] += tuple([x for x in timeseries_feats_columns if 'radial_velocity' in x])
-feats2normalize['L'] += tuple([x for x in timeseries_feats_columns if 'speed' in x])
+feats2normalize['L'] += [x for x in timeseries_feats_columns if 'radial_velocity' in x]
+feats2normalize['L'] += [x for x in timeseries_feats_columns if 'speed' in x]
 
 #add derivatives
 for k,dat in feats2normalize.items():
-    feats2normalize[k] = tuple(dat + tuple(['d_' + x for x in dat]))
+    feats2normalize[k] = dat + ['d_' + x for x in dat]
 
 def _normalize_by_w_length(timeseries_data, feats2norm):
     '''
@@ -99,8 +101,8 @@ def get_df_quantiles(df,
     In the features in `feats2abs` we are going to use only the absolute. This is to 
     deal with worms with unknown dorsal/ventral orientation.
     '''
-    q_vals = [0.1, 0.5, 0.9] #percentiles to calculate
-    iqr_limits = [0.25, 0.75] # range of percentiles used for the interquantile distance
+    q_vals = (0.1, 0.5, 0.9) #percentiles to calculate
+    iqr_limits = (0.25, 0.75) # range of percentiles used for the interquantile distance
     valid_q = q_vals + iqr_limits
     
     df = df.copy() #like this i can modify directoy the df without long lasting consequences
@@ -226,23 +228,24 @@ def _get_subdivided_features(timeseries_data, subdivision_dict):
     return subdivided_df
 
 
-def process_blob_data(blob_features, derivate_delta_time):
+def process_blob_data(blob_features, derivate_delta_time, fps):
     '''
     Filter only the selected features and add derivatives
     '''
 
+
     assert not ((blob_features is None) and (delta_frames is None))
-    index_cols = ['worm_index', 'timestamp']
-    
+    assert all(x in blob_features for x in index_colums)
+
+
     #add the blob prefix to the blob features if it is not present
-    filt_func = lambda x : (not x.startswith('blob_') or (x in index_cols))
+    filt_func = lambda x : (not x.startswith('blob_') and not (x in index_colums))
     blob_features.columns = ['blob_' + x if filt_func(x) else x for x in blob_features.columns ]
     
     #add blob derivatives
     
     derivate_delta_frames = get_delta_in_frames(derivate_delta_time, fps)
-    #TODO I need to decided a clever way to add the derivatives
-    blob_features = pd.concat((timeseries_data[index_cols], blob_features), axis=1)
+    
     blob_l = []
     for w_ind, blob_w in blob_features.groupby('worm_index'):
         blob_w = add_derivatives(blob_w, blob_feats_columns, derivate_delta_frames, fps)
@@ -251,7 +254,7 @@ def process_blob_data(blob_features, derivate_delta_time):
     if blob_l:
         blob_features = pd.concat(blob_l, axis=0)
         #select only the valid columns
-        blob_feats_columns_d = blob_feats_columns + tuple(['d_' + x for x in blob_feats_columns])
+        blob_feats_columns_d = blob_feats_columns + ['d_' + x for x in blob_feats_columns]
         blob_cols = [x for x in blob_feats_columns_d if x in blob_features]
         blob_features = blob_features[blob_cols]
     else:
@@ -267,7 +270,7 @@ def get_summary_stats(timeseries_data,
                       ):
 
     ts_cols_all, v_sign_cols, feats2norm = timeseries_feats_columns, ventral_signed_columns, feats2normalize
-    ts_cols_norm = sum(feats2norm.values(), ())
+    ts_cols_norm = sum(feats2norm.values(), [])
     
     #summarize everything
     exp_feats = [] 
@@ -344,7 +347,10 @@ def get_summary_stats(timeseries_data,
     
     
     if blob_features is not None:
-        blob_features, blob_cols = process_blob_data(blob_features, derivate_delta_time)
+        #I need to add the worm index and timesstamp before calculating the derivative
+        blob_features = pd.concat((timeseries_data[index_colums], blob_features), axis=1)
+        
+        blob_features, blob_cols = process_blob_data(blob_features, derivate_delta_time, fps)
         #get blobstats
         blob_stats = get_df_quantiles(blob_features, feats2check = blob_cols)
         

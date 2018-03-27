@@ -14,17 +14,17 @@ from tierpsy_features.curvatures import curvature_grad
 from tierpsy_features.postures import get_length
 from tierpsy_features.helper import DataPartition, get_n_worms_estimate
 
-path_curvature_columns = ('path_curvature_body', 
+path_curvature_columns = ['path_curvature_body', 
                           'path_curvature_tail', 
                           'path_curvature_midbody', 
                           'path_curvature_head'
-                          )
+                          ]
 
-path_curvature_columns_aux = ('coord_x_body', 'coord_y_body', 
+path_curvature_columns_aux = ['coord_x_body', 'coord_y_body', 
                               'coord_x_tail', 'coord_y_tail',
                               'coord_x_midbody', 'coord_y_midbody', 
                               'coord_x_head', 'coord_y_head'
-                              )
+                              ]
 
 DFLT_ARGS = dict(
         path_step = 11,
