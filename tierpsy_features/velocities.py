@@ -99,9 +99,13 @@ def _h_segment_position(skeletons, partition):
 def get_velocity(skeletons, partition, delta_frames, fps):
     coords, orientation_v = _h_segment_position(skeletons, partition = partition)
     
-    if np.any(np.isnan(coords[:, 0])):
+    nan_frames = np.isnan(coords[:, 0])
+    
+    is_any_nan = np.any(nan_frames)
+    
+    if is_any_nan:
         x = np.arange(coords.shape[0])
-        xp = np.where(~np.isnan(coords[:, 0]))[0]
+        xp = np.where(~nan_frames)[0]
         if xp.size > 2:
             #I only do this if there are actually some points to interpolate
             for ii in range(coords.shape[1]):
@@ -122,6 +126,10 @@ def get_velocity(skeletons, partition, delta_frames, fps):
     angular_velocity = _h_get_velocity(orientation, delta_frames, fps)
     
     centered_skeleton = _h_center_skeleton(skeletons, orientation, coords)
+
+    if is_any_nan:
+        signed_speed[nan_frames] = np.nan
+        angular_velocity[nan_frames] = np.nan
     
     return signed_speed, angular_velocity, centered_skeleton
 
@@ -232,11 +240,9 @@ def get_velocity_features(skeletons, delta_frames, fps):
     if skeletons.shape[0] < delta_frames:
         return
     
+    
     def _process_part(part):
         signed_speed, angular_velocity, centered_skeleton = get_velocity(skeletons, part, delta_frames, fps)
-        
-        
-                
         
         if part == 'body':
             #speed without prefix is the body speed
@@ -266,6 +272,9 @@ def get_velocity_features(skeletons, delta_frames, fps):
                 k_a = 'relative_to_{}_angular_velocity_{}'.format(part, p)
                 part_velocities.append((k_a, r_angular_velocities[p]))
         
+        
+        
+        
         return part_velocities
         
     #process all the parts
@@ -275,6 +284,8 @@ def get_velocity_features(skeletons, delta_frames, fps):
     
     #put all the data into a dataframe
     velocities = pd.DataFrame(OrderedDict(velocities))
+    
+    
     
     assert velocities.shape[0] == skeletons.shape[0]
     
