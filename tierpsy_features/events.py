@@ -8,10 +8,10 @@
 import numpy as np
 import pandas as pd
 
-event_columns = ['motion_mode', 'food_region', 'turn']
-durations_columns = ['event_type', 'region', 
+event_columns = ('motion_mode', 'food_region', 'turn')
+durations_columns = ('event_type', 'region', 
                      'duration', 'timestamp_initial',
-                     'timestamp_final', 'edge_flag']
+                     'timestamp_final', 'edge_flag')
 event_region_labels = {
             'motion_mode': {-1:'backward', 1:'forward', 0:'paused'}, 
             'food_region': {-1:'outside', 1:'inside', 0:'edge'},
@@ -299,7 +299,7 @@ def _get_event_stats(event_durations, n_worms_estimate, total_time):
 #%%
 def get_event_durations(timeseries_data, fps):
     
-    dd = ['worm_index', 'timestamp'] + event_columns
+    dd = ('worm_index', 'timestamp') + event_columns
     dd = [x for x in dd if x in timeseries_data]
     events_df = timeseries_data[dd]
     

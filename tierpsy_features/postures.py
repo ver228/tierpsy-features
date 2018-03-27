@@ -15,20 +15,18 @@ from collections import OrderedDict
 from tierpsy_features.helper import DataPartition
 from tierpsy_features import EIGEN_PROJECTION_FILE
 
-#%%
+morphology_columns = ('length', 'area', 'width_head_base', 'width_midbody', 'width_tail_base')
 
-morphology_columns = ['length', 'area', #'area_length_ratio', 'width_length_ratio',
-       'width_head_base', 'width_midbody', 'width_tail_base']
-posture_columns = ['quirkiness', 'major_axis',
+posture_columns = ('quirkiness', 'major_axis',
        'minor_axis', 'eigen_projection_1', 'eigen_projection_2',
        'eigen_projection_3', 'eigen_projection_4', 'eigen_projection_5',
-       'eigen_projection_6', 'eigen_projection_7']
+       'eigen_projection_6', 'eigen_projection_7')
 
-posture_aux = ['head_tail_distance']
+posture_aux = ('head_tail_distance',)
 
 #%% Morphology Features
 def get_widths(widths):
-    partitions = ['head_base', 'midbody', 'tail_base']
+    partitions = ('head_base', 'midbody', 'tail_base')
     p_obj = DataPartition(partitions, n_segments=widths.shape[1])
     
     with warnings.catch_warnings():

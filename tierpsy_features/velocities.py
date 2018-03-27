@@ -13,7 +13,7 @@ from matplotlib import animation, patches
 from tierpsy_features.helper import DataPartition, nanunwrap
 
 # i am including an excess of subdivisions with the hope to later reduce them
-velocities_columns = ['speed', 'angular_velocity', 'relative_to_body_speed_midbody',
+velocities_columns = ('speed', 'angular_velocity', 'relative_to_body_speed_midbody',
        'relative_to_body_radial_velocity_head_tip',
        'relative_to_body_angular_velocity_head_tip',
        'relative_to_body_radial_velocity_neck',
@@ -34,7 +34,8 @@ velocities_columns = ['speed', 'angular_velocity', 'relative_to_body_speed_midbo
        'relative_to_tail_base_angular_velocity_tail_tip', 'speed_midbody',
        'angular_velocity_midbody', 'speed_head_tip',
        'angular_velocity_head_tip', 'speed_tail_tip',
-       'angular_velocity_tail_tip']
+       'angular_velocity_tail_tip')
+
 #%% features that are relative to specific body parts
 relative_to_dict = {'body' : ('head_tip', 'neck', 'hips', 'tail_tip'), 
                'neck' : ('head_tip',),
@@ -45,8 +46,6 @@ relative_to_dict = {'body' : ('head_tip', 'neck', 'hips', 'tail_tip'),
                'head_tip' : [],
                'tail_tip' : [],
                }
-
-
 
 #%%
 def _h_orientation_vector(x, axis=None):

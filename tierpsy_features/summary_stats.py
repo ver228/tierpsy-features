@@ -15,13 +15,7 @@ from tierpsy_features.path import get_path_extent_stats
 from tierpsy_features import timeseries_feats_columns, \
 ventral_signed_columns, path_curvature_columns, curvature_columns
 
-
- #this is a hack to do not calculate the paused subdivision. I does not seem to be informative at all...
-event_region_labels_r = event_region_labels.copy()
-#del event_region_labels_r['motion_mode'][0]
-
-
-blob_feats_columns = ['blob_area',
+blob_feats_columns = ('blob_area',
  'blob_perimeter',
  'blob_box_length',
  'blob_box_width',
@@ -34,10 +28,12 @@ blob_feats_columns = ['blob_area',
  'blob_hu3',
  'blob_hu4',
  'blob_hu5',
- 'blob_hu6']
+ 'blob_hu6'
+ )
 
+#get the ratios to be normalized
 feats2normalize = {
-    'L' : [
+    'L' : (
        'head_tail_distance',
        'major_axis', 
        'minor_axis', 
@@ -46,18 +42,21 @@ feats2normalize = {
        'width_head_base', 
        'width_midbody', 
        'width_tail_base'
-       ],
+       ),
     '1/L' : path_curvature_columns + curvature_columns,
-    'L^2' : ['area']
+    'L^2' : ('area',)
 }
-feats2normalize['L'] += [x for x in timeseries_feats_columns if 'radial_velocity' in x]
-feats2normalize['L'] += [x for x in timeseries_feats_columns if 'speed' in x]
-#%%
+feats2normalize['L'] += tuple([x for x in timeseries_feats_columns if 'radial_velocity' in x])
+feats2normalize['L'] += tuple([x for x in timeseries_feats_columns if 'speed' in x])
+
+#add derivatives
+for k,dat in feats2normalize.items():
+    feats2normalize[k] = tuple(dat + tuple(['d_' + x for x in dat]))
+
 def _normalize_by_w_length(timeseries_data, feats2norm):
     '''
     Normalize features by body length. This is far from being the most efficient solution, but it is the easier to implement.
     '''
-    
     def _get_conversion_vec(units_t, median_length_vec):
         '''helper function to find how to make the conversion'''
         if units_t == 'L':
@@ -183,7 +182,7 @@ def _get_subdivided_features(timeseries_data, subdivision_dict):
     '''
     
     #assert all the subdivision keys are known events
-    assert all(x in event_region_labels_r.keys() for x in subdivision_dict)
+    assert all(x in event_region_labels.keys() for x in subdivision_dict)
     
     
     event_type_link = {#%%
@@ -227,22 +226,48 @@ def _get_subdivided_features(timeseries_data, subdivision_dict):
     return subdivided_df
 
 
+def process_blob_data(blob_features, derivate_delta_time):
+    '''
+    Filter only the selected features and add derivatives
+    '''
 
-#%%
+    assert not ((blob_features is None) and (delta_frames is None))
+    index_cols = ['worm_index', 'timestamp']
+    
+    #add the blob prefix to the blob features if it is not present
+    filt_func = lambda x : (not x.startswith('blob_') or (x in index_cols))
+    blob_features.columns = ['blob_' + x if filt_func(x) else x for x in blob_features.columns ]
+    
+    #add blob derivatives
+    
+    derivate_delta_frames = get_delta_in_frames(derivate_delta_time, fps)
+    #TODO I need to decided a clever way to add the derivatives
+    blob_features = pd.concat((timeseries_data[index_cols], blob_features), axis=1)
+    blob_l = []
+    for w_ind, blob_w in blob_features.groupby('worm_index'):
+        blob_w = add_derivatives(blob_w, blob_feats_columns, derivate_delta_frames, fps)
+        blob_l.append(blob_w)
+
+    if blob_l:
+        blob_features = pd.concat(blob_l, axis=0)
+        #select only the valid columns
+        blob_feats_columns_d = blob_feats_columns + tuple(['d_' + x for x in blob_feats_columns])
+        blob_cols = [x for x in blob_feats_columns_d if x in blob_features]
+        blob_features = blob_features[blob_cols]
+    else:
+        blob_features = pd.DataFrame([])
+    
+    return blob_features, blob_cols
+
 def get_summary_stats(timeseries_data, 
                       fps, 
                       blob_features = None, 
                       derivate_delta_time = None,
-                      only_abs_ventral = False):
-    
-    #TODO I need to decided a clever way to add the derivatives
-    ts_cols_all = timeseries_feats_columns + ['d_' + x for x in timeseries_feats_columns]
-    v_sign_cols = ventral_signed_columns + ['d_' + x for x in ventral_signed_columns]
-    
-    feats2norm = {}
-    for k,dat in feats2normalize.items():
-        feats2norm[k] = dat + ['d_' + x for x in dat]
-    ts_cols_norm = sum(feats2norm.values(), [])
+                      only_abs_ventral = False,
+                      ):
+
+    ts_cols_all, v_sign_cols, feats2norm = timeseries_feats_columns, ventral_signed_columns, feats2normalize
+    ts_cols_norm = sum(feats2norm.values(), ())
     
     #summarize everything
     exp_feats = [] 
@@ -319,132 +344,28 @@ def get_summary_stats(timeseries_data,
     
     
     if blob_features is not None:
-        assert not ((blob_features is None) and (delta_frames is None))
-        index_cols = ['worm_index', 'timestamp']
+        blob_features, blob_cols = process_blob_data(blob_features, derivate_delta_time)
+        #get blobstats
+        blob_stats = get_df_quantiles(blob_features, feats2check = blob_cols)
         
-        #add the blob prefix to the blob features if it is not present
-        filt_func = lambda x : (not x.startswith('blob_') or (x in index_cols))
-        blob_features.columns = ['blob_' + x if filt_func(x) else x for x in blob_features.columns ]
-        
-        #add blob derivatives
-        
-        derivate_delta_frames = get_delta_in_frames(derivate_delta_time, fps)
-        #TODO I need to decided a clever way to add the derivatives
-        blob_features = pd.concat((timeseries_data[index_cols], blob_features), axis=1)
-        blob_l = []
-        for w_ind, blob_w in blob_features.groupby('worm_index'):
-            blob_w = add_derivatives(blob_w, blob_feats_columns, derivate_delta_frames, fps)
-            blob_l.append(blob_w)
-
-        if blob_l:
-            blob_features = pd.concat(blob_l, axis=0)
-            
-            #select only the valid columns
-            blob_feats_columns_d = blob_feats_columns + ['d_' + x for x in blob_feats_columns]
-            blob_cols = [x for x in blob_feats_columns_d if x in blob_features]
-            blob_features = blob_features[blob_cols]
-            
-            #get blobstats
-            blob_stats = get_df_quantiles(blob_features, feats2check = blob_cols)
-            
-            blob_features['motion_mode'] = timeseries_data['motion_mode']
-            blob_stats_m_subdiv = get_df_quantiles(blob_features, 
-                                              feats2check = blob_cols, 
-                                              subdivision_dict = {'motion_mode':blob_cols}, 
-                                              is_abs_ventral = False)
-            exp_feats += [blob_stats, blob_stats_m_subdiv] 
-                       
+        blob_features['motion_mode'] = timeseries_data['motion_mode']
+        blob_stats_m_subdiv = get_df_quantiles(blob_features, 
+                                          feats2check = blob_cols, 
+                                          subdivision_dict = {'motion_mode':blob_cols}, 
+                                          is_abs_ventral = False)
+        exp_feats += [blob_stats, blob_stats_m_subdiv] 
+                   
     exp_feats = pd.concat(exp_feats)
     return exp_feats
     
-def _get_time_groups(timestamp, time_ranges_m, fps):
-    '''
-    Obtain a vector that divides the timeseries data into groups
-    
-    time_ranges_m - it can be either: 
-        a) None : the function will return an all zeros vector
-        b) int or float : the timestamp will be binned using this value (in minutes).
-        c) list of pairs : the ranges given in this list will be used.
-    
-    The values returned in time_group corresponds to the initial time in minutes of the group.
-    
-    '''
-    if time_ranges_m is None:
-        time_group = np.zeros_like(timestamp)
-    elif isinstance(time_ranges_m, (float, int)):
-        # a number is given, we can use this faster method to create uniform bins
-        window_frames = int(60*time_ranges_m*fps)
-        time_group = np.floor(timestamp/window_frames).astype(np.int)
-        time_group *= time_ranges_m
-    else:
-        #add a flag for each of the given regions
-        fpm = fps*60
-        time_ranges = [(x[0]*fpm, x[1]*fpm) for x in time_ranges_m]
-        time_group = np.full_like(timestamp, -1.)
-        for t0, tf in time_ranges:
-            good = (timestamp >= t0) & (timestamp <= tf)
-            time_group[good] = t0/fpm
-    
-    return time_group
-
-def get_summary_stats_binned(df, fps, time_ranges_m, is_normalize):
-    '''
-    Calculate the stats of the features in df using `get_feat_stats` by binning 
-    the data according to its time. See `_get_time_groups` to see the kind of 
-    values that `time_range_m` accepts.
-    '''
-    df['time_group'] = _get_time_groups(df['timestamp'], time_ranges_m, fps)
-    dat_agg = []
-    for ind_t, dat in df.groupby('time_group'):
-        if ind_t< 0:
-            continue
-        
-        feat_means_s = get_summary_stats(dat, fps, is_normalize) 
-        
-        #add the time information at the begining
-        feat_means_s = pd.Series(ind_t, index=['time_group']).append(feat_means_s)
-        
-        dat_agg.append(feat_means_s)
-    
-    dat_agg = pd.concat(dat_agg, axis=1).T
-    return dat_agg
-
-def collect_summary_stats(fnames, info_df, time_ranges_m = None, is_normalize = False):
-    reserved_w = ['time_group', 'worm_index', 'timestamp']
-    assert not any(x in info_df for x in reserved_w)
-    
-    all_data = []
-    for (iexp, info_row), fname in zip(info_df.iterrows(), fnames):
-        print(iexp + 1, len(fnames))
-        
-        with pd.HDFStore(fname, 'r') as fid:
-            fps = fid.get_storer('/trajectories_data').attrs['fps']
-            features_timeseries = fid['/timeseries_data']
-            
-        feat_mean_df = get_summary_stats_binned(features_timeseries, 
-                                           fps, 
-                                           time_ranges_m,
-                                           is_normalize
-                                           )
-        
-        #add the info to the feat_means
-        dd = pd.concat([info_row] * feat_mean_df.shape[0], axis=1).T
-        dd.index = feat_mean_df.index
-        feat_mean_df = dd.join(feat_mean_df)
-        
-        all_data.append(feat_mean_df)
-        
-    feat_means_df = pd.concat(all_data, ignore_index=True)
-    return feat_means_df
-
 
 #%%
 if __name__ == '__main__':
     from tierpsy.helper.params import read_fps
-    #fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
+    fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
     #%%
     
-    fname = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR/Results/CeNDR_Set1_020617/WN2002_worms10_food1-10_Set1_Pos4_Ch4_02062017_115723_featuresN.hdf5'
+    #fname = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR/Results/CeNDR_Set1_020617/WN2002_worms10_food1-10_Set1_Pos4_Ch4_02062017_115723_featuresN.hdf5'
     with pd.HDFStore(fname, 'r') as fid:
         timeseries_data = fid['/timeseries_data']
         blob_features = fid['/blob_features']
@@ -458,4 +379,6 @@ if __name__ == '__main__':
                                    delta_frames,
                                    only_abs_ventral = True
                                    )
+
+    print(feat_stats)
     
