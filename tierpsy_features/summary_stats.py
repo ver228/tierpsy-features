@@ -143,7 +143,8 @@ def get_df_quantiles(df,
         #find features that match ventral_signed_columns
         if feats2abs:
             #normalize
-            df[feats2abs] = df[feats2abs].abs()
+            if df.size > 0:
+                df[feats2abs] = df[feats2abs].abs()
             #change name
             df.columns = [x + '_abs' if x in feats2abs else x for x in df.columns]
             feats2check = [x + '_abs' if x in feats2abs else x for x in feats2check]
@@ -232,11 +233,8 @@ def process_blob_data(blob_features, derivate_delta_time, fps):
     '''
     Filter only the selected features and add derivatives
     '''
-
-
     assert not ((blob_features is None) and (delta_frames is None))
     assert all(x in blob_features for x in index_colums)
-
 
     #add the blob prefix to the blob features if it is not present
     filt_func = lambda x : (not x.startswith('blob_') and not (x in index_colums))
@@ -258,7 +256,7 @@ def process_blob_data(blob_features, derivate_delta_time, fps):
         blob_cols = [x for x in blob_feats_columns_d if x in blob_features]
         blob_features = blob_features[blob_cols]
     else:
-        blob_features = pd.DataFrame([])
+        blob_features, blob_cols = pd.DataFrame([]), []
     
     return blob_features, blob_cols
 
@@ -268,6 +266,8 @@ def get_summary_stats(timeseries_data,
                       derivate_delta_time = None,
                       only_abs_ventral = False,
                       ):
+    if timeseries_data.size == 0:
+        return pd.DataFrame([])
 
     ts_cols_all, v_sign_cols, feats2norm = timeseries_feats_columns, ventral_signed_columns, feats2normalize
     ts_cols_norm = sum(feats2norm.values(), [])
@@ -360,7 +360,7 @@ def get_summary_stats(timeseries_data,
                                           subdivision_dict = {'motion_mode':blob_cols}, 
                                           is_abs_ventral = False)
         exp_feats += [blob_stats, blob_stats_m_subdiv] 
-                   
+         
     exp_feats = pd.concat(exp_feats)
     return exp_feats
     
@@ -368,21 +368,19 @@ def get_summary_stats(timeseries_data,
 #%%
 if __name__ == '__main__':
     from tierpsy.helper.params import read_fps
-    fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
+    #fname = '/Users/ajaver/OneDrive - Imperial College London/aggregation/N2_1_Ch1_29062017_182108_comp3_featuresN.hdf5'
     #%%
     
-    #fname = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR/Results/CeNDR_Set1_020617/WN2002_worms10_food1-10_Set1_Pos4_Ch4_02062017_115723_featuresN.hdf5'
+    fname = '/Volumes/behavgenom_archive$/Avelino/screening/CeNDR/Results/CeNDR_Set1_020617/WN2002_worms10_food1-10_Set1_Pos4_Ch4_02062017_115723_featuresN.hdf5'
     with pd.HDFStore(fname, 'r') as fid:
         timeseries_data = fid['/timeseries_data']
         blob_features = fid['/blob_features']
     fps = read_fps(fname)
-    delta_frames = max(1, int(fps/3))
-    
     
     feat_stats = get_summary_stats(timeseries_data, 
                                    fps,  
                                    blob_features, 
-                                   delta_frames,
+                                   1/3,
                                    only_abs_ventral = True
                                    )
 

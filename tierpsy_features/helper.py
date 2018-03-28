@@ -67,6 +67,7 @@ def add_derivatives(feats, cols2deriv, delta_frames, fps):
     '''
     Calculate the derivatives of timeseries features, and add the columns to the original dataframe.
     '''
+    #%%
     val_cols = [x for x in cols2deriv if x in feats]
     
     feats = feats.sort_values(by='timestamp')
@@ -87,7 +88,7 @@ def add_derivatives(feats, cols2deriv, delta_frames, fps):
         df_ts.iloc[m_o:-m_f] = vv
         
     feats = pd.concat([feats, df_ts], axis=1)
-    
+    #%%
     return feats
 
 class DataPartition():
