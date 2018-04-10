@@ -233,7 +233,7 @@ def process_blob_data(blob_features, derivate_delta_time, fps):
     '''
     Filter only the selected features and add derivatives
     '''
-    assert not ((blob_features is None) and (delta_frames is None))
+    assert not ((blob_features is None) and (derivate_delta_time is None))
     assert all(x in blob_features for x in index_colums)
 
     #add the blob prefix to the blob features if it is not present

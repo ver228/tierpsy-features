@@ -22,7 +22,7 @@ posture_columns = ['quirkiness', 'major_axis',
        'eigen_projection_3', 'eigen_projection_4', 'eigen_projection_5',
        'eigen_projection_6', 'eigen_projection_7']
 
-posture_aux = ['head_tail_distance',]
+posture_aux = ['head_tail_distance']
 
 #%% Morphology Features
 def get_widths(widths):
@@ -36,7 +36,7 @@ def get_widths(widths):
 
     return segment_widths
 
-def _h_signed_areas(cnt_side1, cnt_side2):
+def _signed_areas(cnt_side1, cnt_side2):
     '''calculate the contour area using the shoelace method, the sign indicate the contour orientation.'''
     assert cnt_side1.shape == cnt_side2.shape
     if cnt_side1.ndim == 2:
@@ -56,7 +56,7 @@ def _h_signed_areas(cnt_side1, cnt_side2):
 
 def get_area(cnt_side1, cnt_side2):
     with np.errstate(invalid='ignore'):
-        area = np.abs(_h_signed_areas(cnt_side1, cnt_side2))
+        area = np.abs(_signed_areas(cnt_side1, cnt_side2))
     return area
 
 def get_length(skeletons):
@@ -96,7 +96,7 @@ def get_morphology_features(skeletons,
 
 
 #%%
-def _h_angles(skeletons):
+def _angles(skeletons):
     dd = np.diff(skeletons,axis=1);
     angles = np.arctan2(dd[...,0], dd[...,1])
     
@@ -114,7 +114,7 @@ def get_eigen_projections(skeletons):
         eigen_worms = fid.get_node('/eigenWorms')[:]
         eigen_worms = eigen_worms.T
     
-    angles, _ = _h_angles(skeletons)   
+    angles, _ = _angles(skeletons)   
     eigen_projections = np.dot(eigen_worms, angles.T)
     eigen_projections = np.rollaxis(eigen_projections, -1, 0)
     return eigen_projections
