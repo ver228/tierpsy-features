@@ -9,6 +9,23 @@ import pandas as pd
 import numpy as np
 import numba
 import math
+import os
+
+extras_dir = os.path.join(os.path.dirname(__file__), 'extras')
+def load_OW_eigen_projections():
+    eigen_projection_file =  os.path.join(extras_dir, 'master_eigen_worms_N2.mat')
+    assert os.path.exists(eigen_projection_file)
+    with tables.File(EIGEN_PROJECTION_FILE) as fid:
+        eigen_worms = fid.get_node('/eigenWorms')[:]
+        eigen_worms = eigen_worms.T
+    return eigen_worms
+
+def load_eigen_projections(n_projections = 7):
+    eigen_projection_file = os.path.join(extras_dir, 'pca_components.npy')
+    assert os.path.exists(eigen_projection_file)
+    eigen_worms = np.load(eigen_projection_file)[:n_projections]
+    return eigen_worms
+
 
 @numba.jit
 def fillfnan(arr):

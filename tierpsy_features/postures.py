@@ -12,8 +12,7 @@ import cv2
 import pandas as pd
 from collections import OrderedDict
 
-from tierpsy_features.helper import DataPartition
-from tierpsy_features import EIGEN_PROJECTION_FILE
+from tierpsy_features.helper import DataPartition, load_eigen_projections
 
 morphology_columns = ['length', 'area', 'width_head_base', 'width_midbody', 'width_tail_base']
 
@@ -63,6 +62,7 @@ def get_length(skeletons):
     '''
     Calculate length using the skeletons
     '''
+    
     delta_coords = np.diff(skeletons, axis=1)
     segment_sizes = np.linalg.norm(delta_coords, axis=2)
     w_length = np.sum(segment_sizes, axis=1)
@@ -110,10 +110,7 @@ def _angles(skeletons):
     return angles, mean_angles
 
 def get_eigen_projections(skeletons):
-    with tables.File(EIGEN_PROJECTION_FILE) as fid:
-        eigen_worms = fid.get_node('/eigenWorms')[:]
-        eigen_worms = eigen_worms.T
-    
+    eigen_worms = load_eigen_projections()
     angles, _ = _angles(skeletons)   
     eigen_projections = np.dot(eigen_worms, angles.T)
     eigen_projections = np.rollaxis(eigen_projections, -1, 0)
