@@ -3,7 +3,6 @@ tierpsy_features/__init__.py
 tierpsy_features/_version.py
 tierpsy_features/curvatures.py
 tierpsy_features/events.py
-tierpsy_features/feat_lists.py
 tierpsy_features/features.py
 tierpsy_features/food.py
 tierpsy_features/helper.py
