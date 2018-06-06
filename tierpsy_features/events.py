@@ -262,7 +262,7 @@ def _get_event_stats(event_durations, n_worms_estimate, total_time):
         return pd.Series() 
 
     all_events_time = event_durations.groupby('event_type').agg({'duration':'sum'})['duration']
-    event_g = event_durations.groupby(('event_type', 'region'))
+    event_g = event_durations.groupby(['event_type', 'region'])
     event_stats = []
     
     valid_regions = [x for x in event_region_labels.keys() if x in all_events_time]

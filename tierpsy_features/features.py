@@ -123,7 +123,7 @@ def get_timeseries_features(skeletons,
     #add any missing column
     all_columns = ['timestamp'] + timeseries_all_columns
     df = pd.DataFrame([], columns = timeseries_all_columns)
-    features_df = pd.concat((df, features_df), ignore_index=True)
+    features_df = pd.concat((df, features_df), ignore_index=True, sort=False)
 
     features_df = features_df[all_columns]
             

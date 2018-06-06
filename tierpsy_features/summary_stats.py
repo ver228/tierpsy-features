@@ -51,9 +51,10 @@ feats2normalize = {
 feats2normalize['L'] += [x for x in timeseries_feats_columns if 'radial_velocity' in x]
 feats2normalize['L'] += [x for x in timeseries_feats_columns if 'speed' in x]
 
-#add derivatives
+#add derivatives and make sure there are not duplicates
 for k,dat in feats2normalize.items():
-    feats2normalize[k] = dat + ['d_' + x for x in dat]
+    dfeats = ['d_' + x for x in dat if not x.startswith('d_')]
+    feats2normalize[k] = list(set(dat) ^ set(dfeats))
 
 def _normalize_by_w_length(timeseries_data, feats2norm):
     '''
@@ -361,8 +362,11 @@ def get_summary_stats(timeseries_data,
                                           is_abs_ventral = False)
         exp_feats += [blob_stats, blob_stats_m_subdiv] 
          
-    exp_feats = pd.concat(exp_feats)
-    return exp_feats
+    exp_feats_df = pd.concat(exp_feats)
+
+    assert not np.any(exp_feats_df.index.duplicated()) #If there are duplicated indexes there might be an error here
+
+    return exp_feats_df
     
 
 #%%
