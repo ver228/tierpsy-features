@@ -8,7 +8,7 @@ AUTHOR_EMAIL = 'avelino.javer@imperial.ac.uk'
 URL = 'https://github.com/ver228/tierpsy-features'
 DOWNLOAD_URL = 'https://github.com/ver228/tierpsy-features'
 DESCRIPTION = "tierpsy_features: C. elegans behaviour features."
-exec(open(MODULE_NAME + '/_version.py').read())
+exec(open(MODULE_NAME + '/version.py').read())
 VERSION = __version__
 
 

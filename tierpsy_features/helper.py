@@ -22,7 +22,8 @@ def load_OW_eigen_projections():
 
 def load_eigen_projections(n_projections = 7):
     eigen_projection_file = os.path.join(extras_dir, 'pca_components.npy')
-    assert os.path.exists(eigen_projection_file)
+    if not os.path.exists(eigen_projection_file):
+        raise FileNotFoundError('The file {} does not exists. I cannot start tierpsy features.') 
     eigen_worms = np.load(eigen_projection_file)[:n_projections]
     return eigen_worms
 
