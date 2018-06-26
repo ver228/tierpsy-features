@@ -1,3 +1,4 @@
+README.md
 setup.py
 tierpsy_features/__init__.py
 tierpsy_features/curvatures.py

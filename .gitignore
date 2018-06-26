@@ -19,6 +19,6 @@ experiments/celine_ageing/scripts/int_avg_maps/*
 experiments/celine_ageing/scripts/ageing_celine_feats\.csv
 experiments/celine_ageing/scripts/ageing_celine\.csv
 *.pkl
-tierpsy_features.egg-info
 .DS_Store
 build
+tierpsy_features.egg-info/
