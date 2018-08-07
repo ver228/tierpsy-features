@@ -111,6 +111,8 @@ def add_derivatives(feats, cols2deriv, delta_frames, fps):
 
 class DataPartition():
     def __init__(self, partitions=None, n_segments=49):
+
+        #the upper limits are one more than the real limit so I can do A[ini:fin]
         partitions_dflt = {'head': (0, 8),
                             'neck': (8, 16),
                             'midbody': (16, 33),
